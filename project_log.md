@@ -459,3 +459,44 @@ Ollama `nomic-embed-text` (768-d), a Docker Compose stack in staging config (:58
 - Job A: injection, learning (50 runs), integrity (4,000 revocation cases, 2,000 erasure subjects).
 - Job B: LongMemEval, LoCoMo and BEIR × 3 models (~8–10 h; mxbai is the long pole).
 - Results go to `bench-results/validation/*.json` (gitignored).
+
+## Session 11 — 2026-10-13: Honest rework (outcome-level evaluation, root-cause fixes)
+
+**User directive:** no manipulated data and no shortcuts. Measure whether answers are *correct* (not only whether retrieval hits), make LLM failures visible, handle facts that change without being declared, use open state-of-the-art methods and open models, and give honest benchmarks.
+
+**Done:**
+1. **No silent mock LLM.**
+   - `UnavailableLLMClient` raises an error instead of returning fabricated output; the API returns 503 `llm_unavailable`.
+   - Services re-raise `LLMError`.
+   - Production refuses the mock LLM.
+   - Commit `cea65b2`.
+2. **Time correctness.**
+   - `event_time` is accepted at ingest (API and both SDKs).
+   - Recency is computed from event time.
+   - Access no longer refreshes recency.
+   - Commit `ffe4c69`.
+3. **Answer-level evaluation** (`bench/answer_eval.py`):
+   - LongMemEval's official reader and judge prompts, verbatim (MIT).
+   - Reader qwen2.5:7b-instruct; judge gemma4, a different family.
+   - EM and token F1 as well, and bootstrap CIs.
+   - Pre-registered dev/test split (`sha256(qid)[0] % 2`). Tune on dev only; test is reported once.
+4. **Harness bug caught before any numbers were reported.**
+   - The oracle context was truncated at 28k chars in 43% of questions, dropping later sessions.
+   - Now only the longest turns are shortened and sessions are never dropped (`num_ctx` 32k).
+5. **Root cause of trailing BM25.**
+   - Hybrid search fused rankings with RRF, then re-sorted by 0.85·cosine + 0.15·BM25, so ranking was effectively dense-only.
+   - Added `hybrid_fusion` (blend / convex / rrf).
+   - Dev-split recall@5 vs BM25 (238 q, all-minilm):
+
+| Fusion | vs BM25 |
+|---|---|
+| blend | −3.7 pts [−8.2, +0.8] |
+| rrf | −1.9 |
+| convex 0.5 | +1.7 |
+| **convex 0.7** | **+3.6 [+0.9, +6.4]** |
+| convex 0.8 | +2.8 |
+| convex 0.9 | +1.1 |
+
+   - Knowledge-update gap: −24 → −4 pts.
+   - The default is changed only after a cross-dataset regression check (LoCoMo, BEIR).
+6. **Time-aware context** (`domain/memory/context.py`): memories are shown oldest first, with dates, and a note that later entries are current. Measured on its own by the `*_ctx` QA setups (same turns, same prompt).

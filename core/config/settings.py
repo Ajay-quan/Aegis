@@ -63,14 +63,15 @@ class Settings(BaseSettings):
     rrf_k: int = 60
     bm25_k1: float = 1.5
     bm25_b: float = 0.75
-    # Relevance fed to ranking = (1 - w) * dense cosine + w * normalized BM25. Tuned on LoCoMo
-    # (bench/RESULTS.md): 0.15 -> recall@5 0.565 vs 0.514 raw dense; 0.3 -> 0.549; 0.5 -> 0.531.
-    hybrid_lexical_weight: float = 0.15
+    # BM25 share of ranking relevance. Tuned on the LongMemEval *dev* split only (test held out):
+    # recall@5 vs BM25: blend/0.15 -3.7 pts, convex 0.5 +1.7, 0.7 +3.6 [+0.9, +6.4], 0.8 +2.8, 0.9 +1.1.
+    # Checked for regressions: LoCoMo 0.508 -> 0.518, BEIR SciFact nDCG@10 0.702 -> 0.706, NFCorpus 0.331 -> 0.332.
+    hybrid_lexical_weight: float = 0.7
     # How dense and BM25 relevance are combined for ranking:
     #   blend  - (1 - w) * raw cosine + w * min-max BM25 (legacy; dense dominates)
     #   convex - (1 - w) * min-max cosine + w * min-max BM25 over the candidate pool
     #   rrf    - Reciprocal Rank Fusion score, rescaled to [0, 1]
-    hybrid_fusion: Literal["blend", "convex", "rrf"] = "blend"
+    hybrid_fusion: Literal["blend", "convex", "rrf"] = "convex"
 
     # Reranking
     reranker_type: Literal["heuristic", "cross_encoder"] = "heuristic"
