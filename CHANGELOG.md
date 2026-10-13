@@ -1,6 +1,27 @@
 # Changelog
 
 
+## Unreleased: corrections and honest evaluation
+
+**Corrections to earlier entries** (the original text below is kept as history):
+- The EWC result (BWT −0.64 → +0.20, 0.3.x) was measured on a synthetic stream with mock
+  embeddings. It is **not** evidence about real workloads and is withdrawn as a claim.
+- `docs/benchmarks/*` (70-memory sample, P@1 = 1.0, etc.) used a tiny hand-made sample and is withdrawn.
+  See `docs/benchmarks/README.md`.
+- The LoCoMo recall@5 0.565 figure came from the dataset the weights were tuned on. It is reported
+  only as the tuning set in `bench/VALIDATION.md`.
+
+**Changed**
+- An unavailable LLM now fails loudly (HTTP 503 `llm_unavailable`); the mock is never a silent fallback.
+- `event_time` is accepted at ingest; recency follows event time, and access no longer refreshes it.
+- Hybrid fusion is `convex` with BM25 weight 0.7, tuned on the LongMemEval dev split only and checked
+  for regressions on LoCoMo and BEIR.
+- `get_context_window` renders memories in time order, with dates.
+
+**Added**
+- `bench/answer_eval.py`: answer-level evaluation using LongMemEval's official prompts.
+
+
 ## 0.4.0 (2026-10-11): AegisMem, the trust layer for agent memory
 
 Merges the v0.3.0 line with the Q1 production core into one product (see `docs/adr/0005-merge-integrity-architecture.md`).

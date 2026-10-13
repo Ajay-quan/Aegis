@@ -62,19 +62,20 @@ human outcomes (approve / reject / correct / confirm / used) ──► event log
 
 ## Measured, not claimed
 
-`python -m bench.run` runs the gated benchmark suite (it also runs in CI):
+All figures come from public, human-made datasets, measured on data never used for seeding or tuning,
+with 95% bootstrap confidence intervals. Full report: [bench/VALIDATION.md](bench/VALIDATION.md)
+(`python -m bench.validate && python -m bench.report`).
 
-| Suite | Current result |
+| What | Result (local all-minilm embeddings) |
 |---|---|
-| Poisoning (held-out, cold start) | recall 0.58 vs 0.125 rules-only; false-positive rate 0.11; 0 false positives on users' own words |
-| Learning from reviewers (8 splits) | held-out recall 0.57 → 0.78 with FPR +0.02 |
-| Revocation (7 scenarios) | 0 revoked memories served; 100% replaced with the current version |
-| Erasure (20 subjects) | 0 residue, 100% cascade recall, 0 collateral, receipts tamper-evident |
-| **Recall, LoCoMo** (real embeddings, 1,536 questions) | recall@5 **0.565** vs 0.514 raw vector search (+5.1 pts); 0 / 5,882 benign turns quarantined |
-| External injections (deepset, EN+DE) | recall 0.12 cold → 0.83 after reviewer learning, FPR 0.09 |
-| Overhead | screening p95 ≈ 0.05 ms, guard p95 ≈ 0.05 ms (in-memory backends) |
+| Revocation, 4,000 cases built from real conversation turns | **0** revoked memories served |
+| Erasure, 2,000 subjects / 8,000 linked items | **0** residue, 100% cascade recall, 0 collateral |
+| Write screening, cold start, held-out attacks | 22.8% macro detection at 0.03% false alarms; most *novel* indirect injections are caught only after learning from reviewer feedback |
+| Memory recall, LongMemEval-S | being re-measured after the fusion fix (dev split: +3.6 pts recall@5 over BM25, CI [+0.9, +6.4]); test-split figures will be published once |
+| Answer accuracy (does the agent answer correctly?) | in progress: LongMemEval official judge protocol, open local reader and judge |
 
-Details and reproduction commands: [bench/RESULTS.md](bench/RESULTS.md).
+Known gaps are listed in the report rather than hidden. `python -m bench.run` runs a small hand-written
+smoke suite in CI as a regression gate. Its numbers are not a performance claim.
 
 ## Repository map
 

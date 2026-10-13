@@ -1,9 +1,8 @@
-# Benchmark Results
+# Withdrawn: legacy benchmark artifacts
 
-- Memories: 70
-- Queries: 10
-- Precision@1: 1.0
-- Precision@3: 0.5
-- Recall@5: 0.9667
-- MRR: 1.0
-- Average latency: 10.3402 ms
+The files in this directory (`sample_dataset.json`, `retrieval_metrics.json`, `continual_eval.*`,
+`ir_benchmark.json`, `latency.csv`) came from a 70-memory hand-made sample and a synthetic continual
+learning stream with mock embeddings. **They are not evidence of real-world performance** and are
+kept only for history.
+
+Current, reproducible results on public, human-made datasets: [bench/VALIDATION.md](../../bench/VALIDATION.md).
