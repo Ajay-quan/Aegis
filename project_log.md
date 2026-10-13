@@ -412,3 +412,50 @@ Ollama `nomic-embed-text` (768-d), a Docker Compose stack in staging config (:58
 - All bench gates pass. Migrations 0001→0006 are clean on Postgres and SQLite.
 - Compose stack on FastAPI 0.143: ready; aegis-audit **7/7**; durable audit trail and `/stats` verified.
 - `helm lint --strict` passes. Version is **0.4.0**, and no "stateful.ai" references remain.
+
+### 2026-10-12/13 · Session 10: Validation sprint on real data (branch `validation/benchmarks`)
+
+**Interaction:**
+- The user asked for validation on large, real (non-AI-generated) datasets with many more iterations before starting Q2.
+- Decisions:
+  - **Free/local embeddings only** (Ollama: all-minilm 384d, nomic-embed-text 768d, mxbai-embed-large 1024d).
+  - **Non-commercial or unasserted-license datasets** are used for internal evaluation only (runtime download, never redistributed).
+  - Headline claims rest on permissive datasets.
+
+**Datasets (verified license, sha256 recorded per run, `bench/sources.py`):**
+
+| Group | Datasets |
+|---|---|
+| Recall | LongMemEval-S (MIT, 500 q, 246,750 turns), LoCoMo (tuning set; internal), BEIR SciFact/NFCorpus/FiQA (CC BY-SA) |
+| Attacks | InjecAgent (MIT), BIPIA (internal), Lakera Gandalf (MIT), deepset (Apache), SPML (MIT, caveat: different threat model) |
+| Benign | OpenAssistant oasst1 (Apache, 88,838 multilingual messages), plus LongMemEval and LoCoMo turns |
+
+- Rejected: HackAPrompt (gated), MSC (no license), WildChat (not needed).
+
+**What the real data exposed (all fixed or reported):**
+1. **The seed corpus was the "AI slop".** The 28 hand-written seed sentences made the risk model treat the word *"assistant"* and phrases like *"you should"* as attack signals, holding **13.2% of real assistant replies** (23.5% in a 5-question smoke run).
+   - It was replaced by `domain/learning/seed_corpus.jsonl.gz`, built by `bench/build_seed_corpus.py`.
+   - Sources (permissive training data only): Gandalf train, deepset train, the InjecAgent seed half, and oasst1 seed-split trees.
+   - Result: **0.04% macro false alarms on 106K real harmless items.**
+2. **Template leakage.**
+   - InjecAgent split by attacker instruction only gave 98% detection, but held-out cases reused tool-response templates.
+   - A strict split by instruction **and** tool gives the honest cold-start figure: **18.3%**.
+3. **BIPIA task hijacks** ("Recommend a good book" inside an email) are 0% at cold start: undetectable from content alone. Context-aware detection is a Q2 item.
+4. **Continual learning (3-run smoke):** never-seen attacks go **15% → 97%** (InjecAgent, deployment tools) and **0% → 72%** (BIPIA, fully disjoint), with false alarms of 0.1–0.4%. The full run is 50 runs × 3 report rates.
+5. **Product bug:** embedding inputs longer than the model's context made long memories unindexable (the outbox would dead-letter them). The backend now truncates adaptively, learning the limit from the provider's rejection.
+6. **Product bug:** retrieval kept the *first* rather than the *best* relevance per memory. Under a stale index, guard substitution served the successor only 67.5% of the time; it is now **100% over 400 real-text cases** (0 leaks).
+7. **Harness bug, not product:** erasure used mock embeddings while ingest used real ones, so duplicates were missed. Fix: `use_embedding()` swaps the backend into every service.
+8. **Environment:** iCloud created 183 byte-identical `* 2.py` sync-conflict copies in the repo, which doubled test collection. They are ignored in pytest and git and were *not deleted* (they are the user's files).
+9. **Methodology note:** hybrid weights were tuned on LoCoMo, so LoCoMo is reported as the *tuning set*. LongMemEval and BEIR are held out.
+
+**Built:**
+- `bench/{sources,embedcache,stats,memory_recall,beir_eval,injection_eval,injection_learning,integrity_scale,validate,report}.py`.
+- Bootstrap CIs everywhere.
+- A resumable orchestrator: `python -m bench.validate`, then `python -m bench.report` produces `bench/VALIDATION.md`.
+- The 52-example hand-written suite was demoted to smoke gates (`bench/thresholds.json`).
+- Risk-model seeding is cached per key (1.1s once per tenant per process).
+
+**Full runs launched in the background:**
+- Job A: injection, learning (50 runs), integrity (4,000 revocation cases, 2,000 erasure subjects).
+- Job B: LongMemEval, LoCoMo and BEIR × 3 models (~8–10 h; mxbai is the long pole).
+- Results go to `bench-results/validation/*.json` (gitignored).
