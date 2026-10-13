@@ -51,6 +51,8 @@ local-embeddings = ["sentence-transformers>=3.0.0"]
 llm = ["openai>=1.30.0", "anthropic>=0.28.0"]
 # Neo4j graph store (multi-store mode only).
 graph = ["neo4j>=5.20.0"]
+# Large-scale validation (bench/validate.py).
+bench = ["pyarrow>=15.0.0"]
 # OTLP trace export.
 otel = ["opentelemetry-exporter-otlp-proto-http>=1.24.0"]
 # Agent-framework integrations.
@@ -94,3 +96,6 @@ testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 include = ["apps*", "core*", "domain*", "adapters*", "services*", "infra*"]
+
+[tool.setuptools.package-data]
+"domain.learning" = ["seed_corpus.jsonl.gz"]

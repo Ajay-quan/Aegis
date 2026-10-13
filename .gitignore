@@ -35,3 +35,7 @@ dist/
 # Build output
 build/
 .next/
+
+# macOS/iCloud sync-conflict copies
+* 2
+* 2.*

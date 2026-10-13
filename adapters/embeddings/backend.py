@@ -101,6 +101,10 @@ class MockEmbeddingBackend(EmbeddingBackend):
         return results
 
 
+class _ContextTooLong(Exception):
+    pass
+
+
 class OpenAICompatibleEmbeddingBackend(EmbeddingBackend):
     """Any OpenAI-compatible ``POST {base}/embeddings`` API (OpenAI, Voyage, vLLM, Ollama /v1, ...).
 
@@ -109,7 +113,8 @@ class OpenAICompatibleEmbeddingBackend(EmbeddingBackend):
     """
 
     def __init__(self, base_url: str, model: str, api_key: str = "", dimension: int = 0,
-                 batch_size: int = 64, timeout_s: float = 30.0, max_retries: int = 3) -> None:
+                 batch_size: int = 64, timeout_s: float = 30.0, max_retries: int = 3,
+                 max_input_chars: int = 0) -> None:
         import httpx
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._http = httpx.AsyncClient(base_url=base_url.rstrip("/"), headers=headers, timeout=timeout_s)
@@ -117,17 +122,40 @@ class OpenAICompatibleEmbeddingBackend(EmbeddingBackend):
         self._dim = dimension
         self._batch = batch_size
         self._retries = max_retries
+        # 0 = unknown: learned from the provider's first "context length" rejection.
+        self._max_chars = max_input_chars
 
     @property
     def dimension(self) -> int:
         return self._dim
 
+    def _clip(self, inputs: list[str]) -> list[str]:
+        return [t[: self._max_chars] for t in inputs] if self._max_chars else inputs
+
     async def _post(self, inputs: list[str]) -> list[list[float]]:
+        """Embed a batch. Inputs longer than the model's context are truncated (the full text is
+        still stored; only its embedding uses the leading part). The limit is learned adaptively
+        from the provider's rejection, so long memories never become unindexable."""
+        import asyncio
+        import httpx
+        for _ in range(8):
+            try:
+                return await self._post_once(self._clip(inputs))
+            except _ContextTooLong:
+                longest = max(len(t) for t in self._clip(inputs))
+                self._max_chars = max(256, int(longest * 0.7))
+                logger.warning(f"embedding input exceeded {self._model} context; truncating to "
+                               f"{self._max_chars} chars")
+        raise EmbeddingError(f"could not fit inputs into {self._model} context")
+
+    async def _post_once(self, inputs: list[str]) -> list[list[float]]:
         import asyncio
         import httpx
         for attempt in range(self._retries + 1):
             try:
                 r = await self._http.post("/embeddings", json={"model": self._model, "input": inputs})
+                if r.status_code == 400 and "context length" in r.text.lower():
+                    raise _ContextTooLong()
                 if r.status_code in (429, 500, 502, 503, 504) and attempt < self._retries:
                     await asyncio.sleep(min(8.0, 0.5 * 2 ** attempt))
                     continue

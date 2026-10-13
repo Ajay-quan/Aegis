@@ -57,6 +57,15 @@ async def build_env(dim: int = 128) -> Env:
     return Env(raw_db, raw_vs, db, vs, graph, embed, cal, risk, ingest, retrieve, erase, outcomes)
 
 
+def use_embedding(env: Env, embed) -> Env:
+    """Swap one embedding backend into *every* service. Partial swaps silently break duplicate
+    detection and similarity checks (found during validation), so all suites must use this."""
+    env.embed = embed
+    for svc in (env.ingest, env.retrieve, env.erase):
+        svc._embed = embed
+    return env
+
+
 def load_jsonl(name: str) -> list[dict[str, Any]]:
     with open(DATASETS / name) as f:
         return [json.loads(line) for line in f if line.strip()]

@@ -28,7 +28,11 @@ from __future__ import annotations
 
 import math
 import re
+import gzip
 import hashlib
+import json
+from functools import lru_cache
+from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
@@ -76,6 +80,22 @@ SEED_BENIGN = [
 ]
 
 
+SEED_CORPUS = Path(__file__).with_name("seed_corpus.jsonl.gz")
+SEED_EPOCHS = 2
+_SEEDED: dict[tuple, tuple[dict, dict, float]] = {}
+ANCHORS = 200
+
+
+@lru_cache(maxsize=1)
+def seed_texts() -> tuple[list[str], list[str]]:
+    """Starting corpus (malicious, benign). Built from real, permissively licensed training data by
+    ``bench/build_seed_corpus.py`` (see NOTICE in that module); falls back to the small built-in lists."""
+    if SEED_CORPUS.exists():
+        rows = [json.loads(line) for line in gzip.open(SEED_CORPUS, "rt")]
+        return ([r["text"] for r in rows if r["label"] == 1], [r["text"] for r in rows if r["label"] == 0])
+    return (list(SEED_MALICIOUS), list(SEED_BENIGN))
+
+
 def tokens(text: str) -> list[str]:
     words = _TOKEN_RE.findall(text.lower())
     return words + [f"{a} {b}" for a, b in zip(words, words[1:])]
@@ -116,18 +136,28 @@ class OnlineRiskModel:
         self.missed_attacks = 0  # reported after slipping past screening (recall signal)
         self.implicit_benign = 0  # used-in-practice signals (counter selection bias)
         self.updated_at: str | None = None
-        self._anchor_malicious = [self.features(t) for t in SEED_MALICIOUS]
-        self._anchor_benign = [self.features(t) for t in SEED_BENIGN]
+        malicious, benign = seed_texts()
+        # Replay anchors: a fixed, deterministic sample of each class (event replay stays exact).
+        self._anchor_malicious = [self.features(t) for t in malicious[:ANCHORS]]
+        self._anchor_benign = [self.features(t) for t in benign[:ANCHORS]]
         self._seed_vocab: dict[int, str] = {}
-        for t in SEED_MALICIOUS + SEED_BENIGN:
+        for t in malicious + benign[: len(malicious)]:
             for tok in tokens(t):
                 self._seed_vocab.setdefault(self._idx(tok), tok)
         if seed:
-            for _ in range(8):
-                for t in SEED_MALICIOUS:
-                    self._step(self.features(t), 1)
-                for t in SEED_BENIGN:
-                    self._step(self.features(t), 0)
+            cached = _SEEDED.get((self._hash_key, self.lr, self.l2))
+            if cached is None:
+                labelled = [(t, 1) for t in malicious] + [(t, 0) for t in benign]
+                labelled.sort(key=lambda x: hashlib.sha1(x[0].encode()).digest())  # deterministic interleave
+                feats = [(self.features(t), y) for t, y in labelled]
+                for _ in range(SEED_EPOCHS):
+                    for f, y in feats:
+                        self._step(f, y)
+                # Seeding is deterministic per key: cache it (each tenant seeds once per process).
+                _SEEDED[(self._hash_key, self.lr, self.l2)] = (dict(self.w), dict(self.g2), self.bias)
+            else:
+                w, g2, bias = cached
+                self.w, self.g2, self.bias = dict(w), dict(g2), bias
 
     # -- features --------------------------------------------------------
 

@@ -2,6 +2,9 @@
 import sys
 import os
 
+# macOS/iCloud sync-conflict copies ("test_x 2.py") must never be collected as tests.
+collect_ignore_glob = ["* 2.py", "**/* 2.py"]
+
 # Tests must not read a developer's personal .env (set before settings are imported).
 os.environ["AEGIS_ENV_FILE"] = ""
 

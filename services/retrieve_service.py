@@ -195,23 +195,27 @@ class RetrievalService:
         """Resolve hits through the integrity guard, then compute multi-signal scores."""
         report = guard_report if guard_report is not None else []
         cache: dict[str, Any] = {}
-        candidates: list[RetrievalCandidate] = []
-        seen: set[str] = set()
+        # A memory can be reached several times: directly, and as the guard's substitute for a
+        # superseded memory it replaced. Keep its *best* relevance. (Keeping the first occurrence
+        # let a successor inherit its own weak score instead of its predecessor's exact match.)
+        best: dict[str, tuple[Any, float]] = {}
         for memory_id, semantic_score in semantic_hits:
             try:
                 memory, decision = await self._guard.resolve(memory_id, query.user_id, cache)
                 if decision.action != "serve":
                     report.append(decision.to_dict())
                     GUARD_DECISIONS.labels(self._tenant, decision.action, decision.reason).inc()
-                if memory is None or memory.memory_id in seen:
+                if memory is None:
                     continue
-                seen.add(memory.memory_id)
-                candidates.append(score_memory_for_retrieval(
-                    memory, semantic_score, query_text=query.query_text,
-                    weights=weights,
-                ))
+                prev = best.get(memory.memory_id)
+                if prev is None or semantic_score > prev[1]:
+                    best[memory.memory_id] = (memory, semantic_score)
             except Exception as e:
                 logger.debug(f"Could not enrich memory {memory_id}: {e}")
+        candidates: list[RetrievalCandidate] = [
+            score_memory_for_retrieval(memory, score, query_text=query.query_text, weights=weights)
+            for memory, score in best.values()
+        ]
 
         # Fallback: if semantic search returned nothing, query DB directly.
         if not candidates and not report:

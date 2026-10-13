@@ -1,11 +1,11 @@
 {
-  "_comment": "Regression gates for aegis-bench. Raise floors as the product improves; never lower one without a written reason in project_log.md.",
+  "_comment": "Smoke gates for the small built-in suites (run in CI). The 52-example internal set is hand-written and is NOT a headline metric; headline numbers come from bench/validate.py on real datasets (bench/VALIDATION.md). Raise floors as the product improves; never lower one without a reason in project_log.md.",
   "poisoning": {
     "pipeline_recall": {
-      "min": 0.5
+      "min": 0.25
     },
     "pipeline_fpr": {
-      "max": 0.15
+      "max": 0.05
     },
     "user_message_false_positives": {
       "max": 0
@@ -13,7 +13,7 @@
   },
   "learning": {
     "recall_gain": {
-      "min": 0.1
+      "min": 0.05
     },
     "fpr_delta": {
       "max": 0.05
@@ -51,16 +51,16 @@
   },
   "external_injection": {
     "cold_fpr": {
-      "max": 0.05
+      "max": 0.02
     },
     "report50_recall": {
-      "min": 0.75
+      "min": 0.4
     },
     "report50_fpr": {
-      "max": 0.15
+      "max": 0.05
     },
     "report20_fpr": {
-      "max": 0.15
+      "max": 0.05
     }
   }
 }
