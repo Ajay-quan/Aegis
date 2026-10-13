@@ -45,10 +45,11 @@ from bench.stats import mean_ci, paired_diff_ci
 OLLAMA = "http://localhost:11434/api/chat"
 CACHE = Path.home() / ".cache/aegis-bench/llm.sqlite"
 OUT = Path("bench-results/validation")
-ARMS = ("no_memory", "oracle", "bm25", "dense", "aegis")
+ARMS = ("no_memory", "oracle", "bm25", "dense", "aegis", "bm25_ctx", "aegis_ctx")
+# *_ctx: same retrieved turns and official prompt; history rendered by the product's time-aware
+# renderer (domain.memory.context) instead of LongMemEval's session format. Isolates presentation.
 TOPK = 10
-TURN_CHARS = 2000
-CONTEXT_CHARS = 28000
+CONTEXT_CHARS = 100000  # ~27k tokens; fits qwen2.5 32k context. Sessions are never dropped.
 
 # --- Official LongMemEval prompts (verbatim) ---------------------------------------------------
 READER_NO_MEMORY = "{}"
@@ -99,7 +100,7 @@ class LLMCache:
         if row:
             return row[0]
         body = {"model": model, "messages": [{"role": "user", "content": prompt}], "stream": False,
-                "options": {"temperature": 0, "seed": 0, "num_ctx": 12288, "num_predict": num_predict}}
+                "options": {"temperature": 0, "seed": 0, "num_ctx": 32768, "num_predict": num_predict}}
         r = await client.post(OLLAMA, json=body, timeout=600)
         r.raise_for_status()  # failures are loud; never substitute an answer
         text = r.json()["message"]["content"].strip()
@@ -132,27 +133,38 @@ def token_f1(pred: str, gold: str) -> float:
 
 
 # --- Context construction per arm --------------------------------------------------------------
-def _clip(s: str, n: int = TURN_CHARS) -> str:
-    return s if len(s) <= n else s[:n] + " ..."
+def _fit(turns: list[dict[str, str]], budget: int = CONTEXT_CHARS) -> dict[int, int]:
+    """Per-turn char caps so the total fits: only the longest turns are shortened, none dropped."""
+    lens = [len(t["content"]) for t in turns]
+    if sum(lens) <= budget:
+        return {i: n for i, n in enumerate(lens)}
+    lo, hi = 0, max(lens)
+    while lo < hi:  # largest cap c with sum(min(len, c)) <= budget
+        c = (lo + hi + 1) // 2
+        lo, hi = (c, hi) if sum(min(n, c) for n in lens) <= budget else (lo, c - 1)
+    return {i: min(n, lo) for i, n in enumerate(lens)}
 
 
 def format_turns(turns: list[dict[str, str]]) -> str:
     """Chronological, grouped by session, in LongMemEval's json-ish history style."""
-    by_sess: dict[str, list[dict[str, str]]] = {}
-    for t in sorted(turns, key=lambda t: (t["date"], t["sid"], t["idx"])):
-        by_sess.setdefault((t["date"], t["sid"]), []).append(t)
+    turns = sorted(turns, key=lambda t: (t["date"], t["sid"], t["idx"]))
+    caps = _fit(turns)
+    by_sess: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for i, t in enumerate(turns):
+        c = t["content"] if caps[i] >= len(t["content"]) else t["content"][:caps[i]] + " ..."
+        by_sess.setdefault((t["date"], t["sid"]), []).append({**t, "content": c})
     blocks = []
     for i, ((date, _), ts) in enumerate(by_sess.items(), 1):
-        body = "\n".join(json.dumps({"role": t["role"], "content": _clip(t["content"])}) for t in ts)
+        body = "\n".join(json.dumps({"role": t["role"], "content": t["content"]}) for t in ts)
         blocks.append(f"### Session {i}:\nSession Date: {date}\nSession Content:\n{body}")
-    out = "\n\n".join(blocks)
-    return out[:CONTEXT_CHARS]
+    return "\n\n".join(blocks)
 
 
 async def retrieve_contexts(q: dict[str, Any], embed: Any) -> dict[str, list[dict[str, str]]]:
     from bench.harness import build_env, use_embedding
     from core.schemas.memory import RetrievalQuery, SourceType
     from domain.memory.lexical import BM25Index
+    from bench.memory_recall import lme_time
 
     turns = []
     for sid, date, sess in zip(q["haystack_session_ids"], q["haystack_dates"], q["haystack_sessions"]):
@@ -167,7 +179,7 @@ async def retrieve_contexts(q: dict[str, Any], embed: Any) -> dict[str, list[dic
     mem_to_tid = {}
     for t in turns:
         src = SourceType.USER_MESSAGE if t["role"] == "user" else SourceType.AGENT_OBSERVATION
-        m = await env.ingest.ingest_text(t["text"], user_id=user, source_type=src)
+        m = await env.ingest.ingest_text(t["text"], user_id=user, source_type=src, event_time=lme_time(t["date"]))
         mem_to_tid[m.memory_id] = t["tid"]
     r = await env.retrieve.retrieve(RetrievalQuery(query_text=q["question"], user_id=user, top_k=TOPK))
     aegis = [mem_to_tid[c.memory.memory_id] for c in r.candidates if c.memory.memory_id in mem_to_tid]
@@ -181,9 +193,19 @@ async def retrieve_contexts(q: dict[str, Any], embed: Any) -> dict[str, list[dic
             "aegis": [by_tid[x] for x in aegis]}
 
 
+def render_product(turns: list[dict[str, str]]) -> str:
+    from bench.memory_recall import lme_time
+    from domain.memory.context import render_entries
+    caps = _fit(turns)
+    return render_entries([(lme_time(t["date"]), f"{t['role']}: {t['content'][:caps[i]]}")
+                           for i, t in enumerate(turns)])
+
+
 def reader_prompt(arm: str, q: dict[str, Any], ctx: list[dict[str, str]] | None) -> str:
     if arm == "no_memory":
         return READER_NO_MEMORY.format(q["question"])
+    if arm.endswith("_ctx"):
+        return READER.format(render_product(ctx or []), q["question_date"], q["question"])
     return READER.format(format_turns(ctx or []), q["question_date"], q["question"])
 
 
@@ -223,7 +245,7 @@ async def generate(split: str, reader: str, embed_model: str, limit: int | None)
                                    "abstention": q["question_id"].endswith("_abs"), "answer": str(q["answer"]),
                                    "gold_sessions": q["answer_session_ids"], "arms": {}}
             for arm in ARMS:
-                ctx = ctxs.get(arm)
+                ctx = ctxs.get(arm.removesuffix("_ctx"))
                 resp = await cache.chat(client, reader, reader_prompt(arm, q, ctx), num_predict=400)
                 rec["arms"][arm] = {"response": resp,
                                     "ctx_tids": [t["tid"] for t in ctx] if ctx and arm != "oracle" else None,
@@ -258,7 +280,8 @@ async def judge(split: str, reader: str, embed_model: str, judge_model: str) -> 
                            "top_k_turns": TOPK, "questions": len(recs), "overall": {}, "by_type": {}, "paired": {}}
     for arm in ARMS:
         out["overall"][arm] = {m: mean_ci([r[m] for r in rows[arm]]) for m in ("judge", "em", "f1", "gold_in_ctx")}
-    for a, b in (("aegis", "bm25"), ("aegis", "dense"), ("aegis", "no_memory"), ("oracle", "aegis")):
+    for a, b in (("aegis", "bm25"), ("aegis", "dense"), ("aegis", "no_memory"), ("oracle", "aegis"),
+                 ("aegis_ctx", "aegis"), ("bm25_ctx", "bm25")):
         out["paired"][f"{a}-{b}"] = paired_diff_ci([r["judge"] for r in rows[a]], [r["judge"] for r in rows[b]])
     for t in sorted({r["qtype"] for r in rows["aegis"]}):
         out["by_type"][t] = {arm: mean_ci([r["judge"] for r in rows[arm] if r["qtype"] == t]) for arm in ARMS}

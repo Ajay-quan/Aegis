@@ -17,6 +17,7 @@ Reported as means with 95% bootstrap CIs, by question type, plus paired aegis-mi
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Iterable
@@ -38,6 +39,7 @@ class Turn:
     session_id: str
     role: str
     text: str
+    when: datetime | None = None  # real conversation time, sent as event_time like a live integration
 
 
 @dataclass
@@ -61,6 +63,12 @@ class Corpus:
 # Dataset adapters
 # ---------------------------------------------------------------------------
 
+def lme_time(date: str) -> datetime:
+    """LongMemEval dates look like '2023/05/20 (Sat) 02:21'."""
+    d, _, hm = date.split(" ")
+    return datetime.strptime(f"{d} {hm}", "%Y/%m/%d %H:%M").replace(tzinfo=timezone.utc)
+
+
 def longmemeval(limit: int | None = None) -> list[Corpus]:
     data = sources.load_json("longmemeval_s")
     out = []
@@ -71,7 +79,7 @@ def longmemeval(limit: int | None = None) -> list[Corpus]:
         for sid, date, sess in zip(q["haystack_session_ids"], q["haystack_dates"], q["haystack_sessions"]):
             for i, t in enumerate(sess):
                 tid = f"{sid}:{i}"
-                turns.append(Turn(tid, sid, t["role"], f"[{date}] {t['role']}: {t['content']}"))
+                turns.append(Turn(tid, sid, t["role"], f"[{date}] {t['role']}: {t['content']}", lme_time(date)))
                 if t.get("has_answer"):
                     ev_turns.add(tid)
         ev_sessions = set(q["answer_session_ids"])
@@ -136,7 +144,7 @@ async def run(corpora: Iterable[Corpus], embed: Any, dataset: str, progress_ever
         sess_of = {t.turn_id: t.session_id for t in corpus.turns}
         for t in corpus.turns:
             src = SourceType.USER_MESSAGE if t.role == "user" or t.role not in ("assistant",) else SourceType.AGENT_OBSERVATION
-            m = await env.ingest.ingest_text(t.text, user_id=user, source_type=src)
+            m = await env.ingest.ingest_text(t.text, user_id=user, source_type=src, event_time=t.when)
             mem_to_turn[m.memory_id] = t.turn_id
             ingested[t.role if t.role in ("user", "assistant") else "speaker"] += 1
             if m.status == "pending":

@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     # Relevance fed to ranking = (1 - w) * dense cosine + w * normalized BM25. Tuned on LoCoMo
     # (bench/RESULTS.md): 0.15 -> recall@5 0.565 vs 0.514 raw dense; 0.3 -> 0.549; 0.5 -> 0.531.
     hybrid_lexical_weight: float = 0.15
+    # How dense and BM25 relevance are combined for ranking:
+    #   blend  - (1 - w) * raw cosine + w * min-max BM25 (legacy; dense dominates)
+    #   convex - (1 - w) * min-max cosine + w * min-max BM25 over the candidate pool
+    #   rrf    - Reciprocal Rank Fusion score, rescaled to [0, 1]
+    hybrid_fusion: Literal["blend", "convex", "rrf"] = "blend"
 
     # Reranking
     reranker_type: Literal["heuristic", "cross_encoder"] = "heuristic"

@@ -146,7 +146,7 @@ class RetrievalService:
 
     @staticmethod
     def _fuse(dense: list[tuple[str, float]], lexical: list[tuple[str, float]]) -> list[tuple[str, float]]:
-        """RRF-ordered candidates with a blended relevance score for ranking."""
+        """Candidates in RRF order, each with the relevance score ranking will use."""
         if not lexical:
             return dense
         dense_map = dict(dense)
@@ -154,6 +154,12 @@ class RetrievalService:
         order = reciprocal_rank_fusion([[i for i, _ in dense], [i for i, _ in lexical]],
                                        k=settings.rrf_k)
         w = settings.hybrid_lexical_weight
+        if settings.hybrid_fusion == "rrf":
+            top = order[0][1] if order else 1.0
+            return [(mid, score / top) for mid, score in order]
+        if settings.hybrid_fusion == "convex":
+            dn = normalize_scores(dense)
+            return [(mid, (1 - w) * dn.get(mid, 0.0) + w * lex_map.get(mid, 0.0)) for mid, _ in order]
         return [(mid, (1 - w) * max(0.0, dense_map.get(mid, 0.0)) + w * lex_map.get(mid, 0.0))
                 for mid, _ in order]
 
@@ -312,15 +318,5 @@ class RetrievalService:
             )
         )
 
-        if not result.candidates:
-            return ""
-
-        lines = ["# Relevant Memories\n"]
-        for i, c in enumerate(result.candidates, 1):
-            m = c.memory
-            lines.append(
-                f"{i}. [{m.memory_type}] {m.content} "
-                f"(importance={m.importance_score:.2f}, score={c.composite_score:.2f})"
-            )
-
-        return "\n".join(lines)
+        from domain.memory.context import render_context
+        return render_context([c.memory for c in result.candidates], now=datetime.now(timezone.utc))
