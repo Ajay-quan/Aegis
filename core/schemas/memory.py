@@ -136,8 +136,9 @@ class MemoryItem(BaseModel):
         return v.strip()
 
     def bump_access(self) -> "MemoryItem":
+        # Access is not a modification: touching updated_at here made every retrieval
+        # look "recent" to the ranking (a popularity loop through recency).
         self.access_count += 1
-        self.updated_at = utcnow()
         return self
 
     def supersede(self) -> "MemoryItem":

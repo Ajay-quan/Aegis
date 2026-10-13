@@ -19,6 +19,8 @@ class IngestRequest(BaseModel):
     agent_id: str = ""
     memory_type: str = "observation"
     source_type: str = "user_message"
+    event_time: datetime | None = Field(default=None, description="When this happened (defaults to now). "
+                                        "Set it when importing history so recency and time questions are correct.")
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

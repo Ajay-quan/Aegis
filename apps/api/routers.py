@@ -88,6 +88,7 @@ async def ingest_memory(
             memory_type=mem_type,
             source_type=src_type,
             metadata=request.metadata,
+            event_time=request.event_time,
         )
         return _ingest_response(memory)
 
@@ -119,6 +120,7 @@ async def ingest_batch(
                     memory_type=mem_type,
                     source_type=src_type,
                     metadata=item.metadata,
+                    event_time=item.event_time,
                 )
                 memory_ids.append(memory.memory_id)
                 ingested += 1

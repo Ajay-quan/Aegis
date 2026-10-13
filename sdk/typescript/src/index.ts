@@ -199,12 +199,13 @@ export class AegisMem {
 
   ingest(p: { text: string; userId: string; sessionId?: string; agentId?: string; memoryType?: string;
               sourceType?: SourceType; origin?: string; metadata?: Record<string, unknown>;
-              idempotencyKey?: string }): Promise<WriteResult> {
+              idempotencyKey?: string; eventTime?: string }): Promise<WriteResult> {
     const metadata = { ...(p.metadata ?? {}), ...(p.origin ? { origin: p.origin } : {}) };
     return this.request("POST", "/ingest", {
       idempotent: false, idempotencyKey: p.idempotencyKey ?? `sdk-${crypto.randomUUID()}`,
       body: { text: p.text, user_id: p.userId, session_id: p.sessionId ?? "", agent_id: p.agentId ?? "",
-              memory_type: p.memoryType ?? "observation", source_type: p.sourceType ?? "user_message", metadata },
+              memory_type: p.memoryType ?? "observation", source_type: p.sourceType ?? "user_message", metadata,
+              event_time: p.eventTime ?? null },
     });
   }
 

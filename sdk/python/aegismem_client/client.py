@@ -115,7 +115,7 @@ class AegisMem:
         source_type: Literal["user_message", "agent_observation", "tool_output", "ingestion",
                              "reflection", "system"] = "user_message",
         origin: str | None = None, metadata: dict[str, Any] | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: str | None = None, event_time: str | None = None,
     ) -> m.WriteResult:
         """Store a memory. Pass ``origin`` (e.g. ``"tool:web_search"``, ``"domain:example.com"``)
         so trust can be learned per origin. Check ``result.quarantined``."""
@@ -123,7 +123,8 @@ class AegisMem:
         if origin:
             meta["origin"] = origin
         body = {"text": text, "user_id": user_id, "session_id": session_id, "agent_id": agent_id,
-                "memory_type": memory_type, "source_type": source_type, "metadata": meta}
+                "memory_type": memory_type, "source_type": source_type, "metadata": meta,
+                "event_time": event_time}
         return m.WriteResult(**await self._request("POST", "/ingest", json=body, idempotent=False,
                                                    idempotency_key=idempotency_key or _new_key()))
 

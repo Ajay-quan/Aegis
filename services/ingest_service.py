@@ -210,9 +210,11 @@ class IngestionService:
         source_type: SourceType = SourceType.USER_MESSAGE,
         metadata: dict[str, Any] | None = None,
         importance_override: float | None = None,
+        event_time: datetime | None = None,
     ) -> MemoryItem:
         """Convenience method to ingest plain text."""
         obs = Observation(
+            **({"observed_at": event_time} if event_time else {}),
             session_id=session_id,
             user_id=user_id,
             agent_id=agent_id,

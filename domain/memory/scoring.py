@@ -30,7 +30,8 @@ def compute_recency_score(
     Default comes from ``settings.recency_decay_hours``.
     """
     dh = decay_hours or settings.recency_decay_hours
-    ref_time = memory.updated_at or memory.created_at
+    # When the information is from (event time), not when it was stored or last touched.
+    ref_time = memory.event_time or memory.created_at
     if ref_time.tzinfo is None:
         ref_time = ref_time.replace(tzinfo=timezone.utc)
     hours_elapsed = max((utcnow() - ref_time).total_seconds() / 3600.0, 0.0)
