@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import logging
+
+from core.exceptions import LLMError
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -103,8 +105,10 @@ class ContradictionService:
                     f"(type={ctype.value}, confidence={report.confidence:.2f})"
                 )
                 return report
+        except LLMError:
+            raise  # LLM unavailable must surface (HTTP 503), never become a default answer
         except Exception as e:
-            logger.warning(f"Contradiction check failed: {e}")
+            logger.warning(f"Contradiction check failed (unusable model output): {e}")
         return None
 
     async def scan_for_contradictions(
@@ -134,9 +138,13 @@ class ContradictionService:
                     if report:
                         reports.append(report)
                         await self._persist_contradiction(memory, other, report)
+                except LLMError:
+                    raise
                 except Exception as e:
                     logger.debug(f"Error checking memory {hit.id}: {e}")
 
+        except LLMError:
+            raise  # LLM unavailable must surface (HTTP 503), never become a default answer
         except Exception as e:
             logger.warning(f"Contradiction scan failed: {e}")
 

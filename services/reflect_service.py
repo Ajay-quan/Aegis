@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+
+from core.exceptions import LLMError
 from datetime import datetime, timezone
 from typing import Any
 
@@ -81,8 +83,10 @@ class ReflectionService:
             result = await self._llm.generate_json(
                 REFLECTION_PROMPT.format(memories=memories_str)
             )
+        except LLMError:
+            raise  # LLM unavailable must surface (HTTP 503), never become a default answer
         except Exception as e:
-            logger.error(f"Reflection LLM call failed: {e}")
+            logger.error(f"Reflection LLM output unusable: {e}")
             return []
 
         reflections = []

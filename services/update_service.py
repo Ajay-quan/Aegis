@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+
+from core.exceptions import LLMError
 from datetime import datetime, timezone
 from typing import Any
 
@@ -116,8 +118,10 @@ class UpdateService:
             reason = result.get("reason", "")
             merged_content = result.get("merged_content", "")
             confidence = result.get("confidence", 0.8)
+        except LLMError:
+            raise  # LLM unavailable must surface (HTTP 503), never become a default answer
         except Exception as e:
-            logger.warning(f"Update LLM call failed: {e}, defaulting to create")
+            logger.warning(f"Update LLM output unusable: {e}, defaulting to create")
             action = "create"
             reason = "LLM unavailable"
             merged_content = ""

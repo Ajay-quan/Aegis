@@ -212,12 +212,17 @@ def get_embedding() -> EmbeddingBackend:
 
 
 def get_llm() -> LLMClient:
+    """Configured LLM. Never silently substitutes a fake: mock only when explicitly configured
+    (development/tests); otherwise an unavailable client whose every call raises (HTTP 503)."""
+    if settings.default_llm_provider == "mock":
+        from adapters.llm.mock_client import MockLLMClient
+        return MockLLMClient()
     try:
         return create_llm_client()
     except Exception as e:
-        logger.warning(f"LLM client unavailable ({e}), using mock")
-        from adapters.llm.mock_client import MockLLMClient
-        return MockLLMClient()
+        logger.error(f"LLM client unavailable ({e}); LLM-dependent endpoints will return 503")
+        from adapters.llm.unavailable import UnavailableLLMClient
+        return UnavailableLLMClient(str(e))
 
 
 async def get_ingest_service(

@@ -21,7 +21,7 @@ from apps.api.auth import authorize, require_admin
 from apps.api.routing import route_template
 from apps.api.security import install_security
 from adapters.tenancy import TenantViolation
-from core.exceptions import MemoryNotFoundError
+from core.exceptions import LLMError, MemoryNotFoundError
 from core.version import ENGINE_NAME, PRODUCT_NAME, __version__
 from core.observability.metrics import HTTP_LATENCY, HTTP_REQUESTS, REGISTRY
 from core.observability.tracing import setup_tracing, tracer
@@ -101,6 +101,8 @@ def validate_runtime_config() -> None:
         problems.append("APP_SECRET_KEY must be set to a strong secret")
     if not settings.api_key_pepper:
         problems.append("API_KEY_PEPPER must be set (separate from APP_SECRET_KEY)")
+    if settings.default_llm_provider == "mock":
+        problems.append("DEFAULT_LLM_PROVIDER=mock returns fabricated results; configure a real LLM")
     if settings.embedding_backend == "mock":
         problems.append("EMBEDDING_BACKEND=mock produces meaningless vectors; configure a real backend")
     for name in ("memory_backend", "vector_backend", "graph_backend"):
@@ -166,6 +168,12 @@ def create_app() -> FastAPI:
     @app.exception_handler(MemoryNotFoundError)
     async def not_found_handler(request: Request, exc: MemoryNotFoundError):
         return JSONResponse(status_code=404, content={"detail": "memory not found"})
+
+    @app.exception_handler(LLMError)
+    async def llm_unavailable_handler(request: Request, exc: LLMError):
+        logger.error(f"LLM error on {request.url.path}: {exc}")
+        return JSONResponse(status_code=503, content={"error": {
+            "code": "llm_unavailable", "message": str(exc)}})
 
     @app.exception_handler(TenantViolation)
     async def tenant_handler(request: Request, exc: TenantViolation):
