@@ -99,11 +99,13 @@ class LLMCache:
         row = self.db.execute("SELECT v FROM c WHERE k=?", (key,)).fetchone()
         if row:
             return row[0]
-        body = {"model": model, "messages": [{"role": "user", "content": prompt}], "stream": False,
+        body = {"model": model, "messages": [{"role": "user", "content": prompt}], "stream": False, "think": False,
                 "options": {"temperature": 0, "seed": 0, "num_ctx": 32768, "num_predict": num_predict}}
         r = await client.post(OLLAMA, json=body, timeout=600)
         r.raise_for_status()  # failures are loud; never substitute an answer
         text = r.json()["message"]["content"].strip()
+        if not text:  # e.g. a thinking model spent its budget on hidden reasoning: fail, never score it
+            raise RuntimeError(f"{model} returned empty output")
         self.db.execute("INSERT OR REPLACE INTO c VALUES (?,?)", (key, text))
         self.db.commit()
         return text
@@ -209,6 +211,14 @@ def reader_prompt(arm: str, q: dict[str, Any], ctx: list[dict[str, str]] | None)
     return READER.format(format_turns(ctx or []), q["question_date"], q["question"])
 
 
+def parse_verdict(v: str) -> float:
+    """Strict: the reply must start with yes or no. Anything else is an error, not a 'no'."""
+    w = re.sub(r"[^a-z]", " ", v.lower()).split()
+    if w and w[0] in ("yes", "no"):
+        return float(w[0] == "yes")
+    raise ValueError(f"unparseable judge verdict: {v!r}")
+
+
 def judge_prompt(q: dict[str, Any], response: str) -> str:
     if q["question_id"].endswith("_abs"):
         tpl = JUDGE["abstention"]
@@ -269,9 +279,9 @@ async def judge(split: str, reader: str, embed_model: str, judge_model: str) -> 
             q = qmap[rec["qid"]]
             for arm in ARMS:
                 resp = rec["arms"][arm]["response"]
-                verdict = await cache.chat(client, judge_model, judge_prompt(q, resp), num_predict=8)
+                verdict = await cache.chat(client, judge_model, judge_prompt(q, resp), num_predict=16)
                 rows[arm].append({"qid": rec["qid"], "qtype": "abstention" if rec["abstention"] else rec["qtype"],
-                                  "judge": float("yes" in verdict.lower()),
+                                  "judge": parse_verdict(verdict),
                                   "em": contains_em(resp, rec["answer"]), "f1": token_f1(resp, rec["answer"]),
                                   "gold_in_ctx": float(rec["arms"][arm]["gold_session_in_ctx"])})
             if i % 25 == 0:

@@ -500,3 +500,20 @@ Ollama `nomic-embed-text` (768-d), a Docker Compose stack in staging config (:58
    - Knowledge-update gap: −24 → −4 pts.
    - The default is changed only after a cross-dataset regression check (LoCoMo, BEIR).
 6. **Time-aware context** (`domain/memory/context.py`): memories are shown oldest first, with dates, and a note that later entries are current. Measured on its own by the `*_ctx` QA setups (same turns, same prompt).
+7. **Answer accuracy, LongMemEval dev split** (256 q; reader qwen2.5-7B, judge gemma4, official prompts, 95% CIs).
+
+   | Setup | Judged accuracy |
+   |---|---|
+   | no memory | 5.5% |
+   | dense | 47.3% |
+   | BM25 | 53.5% |
+   | AegisMem | 53.9% [47.7, 59.8] |
+   | AegisMem + time-aware context | 55.1% |
+   | oracle | 59.4% |
+
+   - AegisMem vs dense: **+6.6 [+0.8, +12.5]**, significant.
+   - AegisMem vs BM25: +0.4 [−3.9, +5.1], a tie.
+   - Time-aware context: +1.2 [−3.5, +5.1], not significant.
+   - Knowledge update: 74% (aegis_ctx 86%, oracle 71%).
+   - Weakest types: multi-session (33%) and temporal reasoning (38%).
+   - **Judge bug caught:** gemma4 "thinking" consumed `num_predict=8` and returned empty text, which was scored as "no" (judged accuracy about 0%). Fixed with `think: false`; empty output now raises an error; verdicts must start with yes or no.
