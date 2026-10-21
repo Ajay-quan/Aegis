@@ -25,7 +25,8 @@ type Turn = { role: string; content: string; has_answer?: boolean };
 type Q = { question_id: string; question_type: string; question: string; haystack_dates: string[]; haystack_sessions: Turn[][] };
 
 const data: Q[] = JSON.parse(readFileSync(resolve(homedir(), ".cache/aegis-bench/longmemeval_s_cleaned.json"), "utf8"));
-const dev = data.filter((q) => !q.question_id.endsWith("_abs") && createHash("sha256").update(q.question_id).digest()[0] % 2 === 0);
+const SPLIT = process.env.SPLIT === "test" ? "test" : "dev";
+const dev = data.filter((q) => !q.question_id.endsWith("_abs") && (createHash("sha256").update(q.question_id).digest()[0] % 2 === 0) === (SPLIT === "dev"));
 const limit = Number(process.argv[2] ?? dev.length);
 
 function ci(xs: number[]): { mean: number; lo: number; hi: number; n: number } {
@@ -92,7 +93,7 @@ for (const [qi, q] of dev.slice(0, limit).entries()) {
 
 const systems = ["hybrid", "keyword", "meaning", "raw_bm25"] as const;
 const summary: Record<string, unknown> = {
-  dataset: "LongMemEval-S cleaned (MIT), dev split, non-abstention",
+  dataset: `LongMemEval-S cleaned (MIT), ${SPLIT} split, non-abstention`,
   questions: rows.length,
   capture: ci(rows.map((r) => r.capture as number)),
   overall: Object.fromEntries(systems.map((s) => [s, ci(rows.map((r) => r[s] as number))])),
@@ -108,5 +109,5 @@ for (const t of [...new Set(rows.map((r) => r.type as string))].sort()) {
     ...Object.fromEntries(systems.map((s) => [s, ci(rs.map((r) => r[s] as number)).mean])),
   };
 }
-writeFileSync("eval/longmemeval-dev.json", JSON.stringify(summary, null, 2));
+writeFileSync(`eval/longmemeval-${SPLIT}.json`, JSON.stringify(summary, null, 2));
 console.log(JSON.stringify(summary, null, 2));

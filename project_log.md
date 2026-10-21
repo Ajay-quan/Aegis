@@ -540,3 +540,55 @@ Ollama `nomic-embed-text` (768-d), a Docker Compose stack in staging config (:58
 - On-device embeddings with hybrid fusion (port of the validated convex 0.7).
 - On-device categorization model, evaluated on real data.
 - Store listing and privacy policy.
+
+## Session 13 — 2026-10-21: Extension v0.2, a finished, measured product
+
+**User directive:** complete the extension end to end without stopping; log every change and decision.
+
+**Built:**
+- **On-device smart search.**
+  - all-MiniLM-L6-v2 (int8 ONNX, 23 MB, sha256 `afdb6f1a…`) bundled with ONNX Runtime Web, running in an MV3 offscreen document.
+  - Hybrid ranking: min-max BM25 and cosine, 0.7 lexical weight (the configuration validated in Session 11).
+  - **Decision:** bundle the model and runtime instead of downloading at runtime. MV3 forbids remote code, and the product must work offline.
+- **Keyword-only fallback is visible.** If the model fails, the panel shows "keyword search only". The model error is surfaced, never swallowed.
+- **Capture rule rewritten after measurement.**
+  - The v0.1 cue-word allow-list captured **0%** of the gold evidence on the first LongMemEval questions.
+  - It is now a block-list: questions, requests to the AI, small talk, and reactions to the AI's reply.
+  - Evidence capture went from 0% to 86–88%.
+- **Noise filter for reactions** ("I like these ideas"). Measured trade-off on dev: memories per user 295 → 271, hit@5 81.5 → 80.7 (not significant). Kept.
+- **Categories.**
+  - Keyword rules, plus a meaning-based fallback (nearest category examples, threshold 0.25).
+  - Author audit of 60 real memories: coverage 38% → 68%, precision about 63%.
+  - Documented as a browsing convenience, not a quality claim.
+- **Sites.** Gemini and Perplexity adapters added (beta, unverified against the live sites).
+- **Capture at Enter.** A second, selector-independent capture path. Inserted memory blocks are never re-captured.
+- **Settings and safety.** Auto-lock (alarms, default 30 min), passphrase change, recovery, a search box in the panel, a welcome tab on install.
+- **Store readiness.** Icons, `store/PRIVACY.md` (no data collected), `store/LISTING.md`, `npm run package` producing a 23 MB zip (v0.2.0).
+- **Security.** The trust rule was extracted to `src/trust.ts` and unit-tested. Content scripts may only use `status`, `capture` and `context`.
+
+**Tests:**
+- 12 unit tests.
+- An end-to-end test in real Chromium. It covers: model loads; vault setup; capture on ChatGPT; injection held for Review; semantic recall among 13 memories; insertion; ciphertext only at rest; delete; Enter capture on Claude; no re-capture; lock/unlock persistence; passphrase change.
+- Removed a trivial e2e step ("web page can't export") that passed for the wrong reason. Replaced by a unit test of the real rule.
+
+**Measured** (extension pipeline, LongMemEval-S, tuned on dev, **test split run once**, 232 q):
+
+| System | hit@5 |
+|---|---|
+| Hybrid | **78.4% [72.0, 83.6]** |
+| Keyword only | 71.6% |
+| Meaning only | 80.2% |
+| Raw BM25 | 70.3% |
+
+- Hybrid vs keyword-only: **+6.9 [+3.4, +9.9]**.
+- Meaning-only scored above hybrid on test (not significant). Not re-tuned on test.
+- Structural miss: evidence only in AI replies (3%), by design.
+
+**Bugs found by tests and measurement:**
+- The ORT runtime required the `asyncify` WASM variant; the model failed to load in the extension.
+- Weak tests were fixed: the semantic test with only 3 memories, and the racy review-tab check.
+
+**Remaining before public launch:**
+- Verify the four site adapters against the live sites, logged in.
+- Create the Chrome Web Store developer account and submit (user action).
+- Optionally, an on-device LLM (Chrome built-in AI) for categorization and fact extraction, measured first.

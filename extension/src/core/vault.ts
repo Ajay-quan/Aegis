@@ -12,6 +12,7 @@ import { categorize, isMemorable, redact, screen, sentences, slotOf, type Catego
 import { createVault, openJson, sealJson, unlockWithPassphrase, unlockWithRecovery, changePassphrase } from "./crypto";
 import { BM25, jaccard } from "./search";
 import { cosine, type Embedder } from "./vector";
+import { categorizeByMeaning } from "./categories";
 import { store } from "./store";
 
 export type Status = "active" | "pending" | "retired";
@@ -26,6 +27,7 @@ export interface Memory {
   createdAt: string; // ISO
   redactions: string[];
   flags: string[]; // matched injection phrases, if any
+  userCategory?: boolean; // set when the user picked the category by hand
   slot?: string; // single-valued fact this memory sets (residence, employer, diet, relationship)
   vec?: number[]; // on-device embedding (encrypted with the record)
   updates?: string; // id of an older memory this one appears to update
@@ -218,7 +220,11 @@ export class Vault {
         const vecs = await this.embedder(batch.map((m) => m.text));
         for (let j = 0; j < batch.length; j++) {
           const cur = this.mem.get(batch[j].id);
-          if (cur) await this.save({ ...cur, vec: vecs[j] });
+          if (!cur) continue;
+          // Keyword rules first; meaning-based fallback only for what they leave as "other",
+          // and never overriding a category the user chose.
+          const category = cur.category === "other" && !cur.userCategory ? await categorizeByMeaning(vecs[j], this.embedder) : cur.category;
+          await this.save({ ...cur, vec: vecs[j], category });
         }
       } catch {
         return i; // model unavailable: memories stay searchable by keyword and get embedded later
@@ -293,7 +299,7 @@ export class Vault {
 
   async setCategory(id: string, category: Category): Promise<void> {
     const m = this.mem.get(id);
-    if (m) await this.save({ ...m, category });
+    if (m) await this.save({ ...m, category, userCategory: true });
   }
 
   /** Permanently erase. The record is removed from storage, not just hidden. */

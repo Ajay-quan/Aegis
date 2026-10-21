@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AegisMem: private memory for your AIs",
   "short_name": "AegisMem",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Encrypted, on-device memory that follows you across ChatGPT and Claude. You see, edit and delete everything.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "sidePanel", "unlimitedStorage", "offscreen", "alarms"],

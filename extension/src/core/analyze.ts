@@ -113,6 +113,8 @@ export function categorize(text: string): Category {
 }
 
 const REQUEST = /^(can|could|would|will) you\b|^(please|pls|help me|tell me|show me|give me|write|explain|summari[sz]e|list|generate|create|make|translate|fix|draft|suggest|recommend|describe|compare)\b|^(what|how|why|which|where|when|who|is|are|do|does|should|any)\b/i;
+// Reactions to the AI's previous reply: about the conversation, not about the user.
+const REACTION = /\b(you (mentioned|said|suggested|explained|recommended|shared|provided)|your (suggestions?|advice|tips|ideas?|recommendations?|explanation|help)|th(ese|ose) (ideas|tips|suggestions|options|recommendations|guys)|(that|this|it) sounds|i('m| am) glad|i appreciate|thanks? (you|for)|i('ll| will) (definitely|make sure to|keep (that|this|those)|check|look into|consider))\b/i;
 const SMALL_TALK = /^(hi|hello|hey|thanks|thank you|thx|ok|okay|great|cool|awesome|sounds good|got it|perfect|nice|sure|yes|no)\b[\s!.,]*\S{0,40}$/i;
 
 /**
@@ -126,7 +128,7 @@ export function isMemorable(text: string): boolean {
   if (t.length < 15 || t.length > 1500) return false;
   if (t.endsWith("?")) return false;
   if (!/\b(i|i'm|i've|i'd|i'll|im|my|me|mine|we|we're|we've|our|us)\b/i.test(t)) return false;
-  if (REQUEST.test(t) || SMALL_TALK.test(t)) return false;
+  if (REQUEST.test(t) || SMALL_TALK.test(t) || REACTION.test(t)) return false;
   return true;
 }
 
