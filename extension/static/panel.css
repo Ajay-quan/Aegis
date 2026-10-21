@@ -1,0 +1,24 @@
+:root { --bg:#ffffff; --fg:#111827; --muted:#6b7280; --line:#e5e7eb; --card:#f9fafb; --accent:#4f46e5; --warn:#b45309; --danger:#b91c1c; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --fg:#e5e7eb; --muted:#9ca3af; --line:#272a33; --card:#171a21; --accent:#818cf8; --warn:#f59e0b; --danger:#f87171; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,-apple-system,sans-serif; }
+header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
+#lockstate { color:var(--muted); font-size:12px; }
+main { padding:12px 16px 32px; }
+h2 { font-size:15px; margin:8px 0; }
+p.hint { color:var(--muted); font-size:12px; margin:4px 0 10px; }
+input, textarea, select { width:100%; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--fg); font:inherit; }
+textarea { min-height:60px; resize:vertical; }
+button { border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:6px; padding:6px 10px; font:inherit; cursor:pointer; }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+button.danger { color:var(--danger); }
+.row { display:flex; gap:8px; align-items:center; margin:8px 0; }
+.tabs { display:flex; gap:4px; margin-bottom:10px; }
+.tabs button[aria-selected="true"] { border-color:var(--accent); color:var(--accent); }
+.card { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:10px; margin:8px 0; }
+.card .meta { color:var(--muted); font-size:12px; margin-top:4px; }
+.card .actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+.badge { display:inline-block; font-size:11px; padding:1px 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); margin-right:4px; }
+.badge.warn { color:var(--warn); border-color:var(--warn); }
+.key { font-family:ui-monospace,monospace; word-break:break-all; padding:10px; border:1px dashed var(--warn); border-radius:6px; }
+.err { color:var(--danger); font-size:13px; }

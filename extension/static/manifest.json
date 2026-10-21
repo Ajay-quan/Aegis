@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "AegisMem: private memory for your AIs",
+  "short_name": "AegisMem",
+  "version": "0.1.0",
+  "description": "Encrypted, on-device memory that follows you across ChatGPT and Claude. You see, edit and delete everything.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "sidePanel", "unlimitedStorage"],
+  "host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "side_panel": { "default_path": "panel.html" },
+  "action": { "default_title": "Open AegisMem" },
+  "content_scripts": [
+    { "matches": ["https://chatgpt.com/*", "https://claude.ai/*"], "js": ["content.js"], "run_at": "document_idle" }
+  ],
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" }
+}
