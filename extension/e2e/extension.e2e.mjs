@@ -20,6 +20,8 @@ try {
   step(`extension loaded (${id})`);
 
   // Fake chatgpt.com with the selectors the adapter relies on.
+  await ctx.route("https://claude.ai/**", (r) => r.fulfill({ contentType: "text/html", body: `<!doctype html><html><body>
+    <div class="ProseMirror" contenteditable="true"></div></body></html>` }));
   await ctx.route("https://chatgpt.com/**", (r) => r.fulfill({ contentType: "text/html", body: `<!doctype html><html><body>
     <div id="thread"></div><div id="prompt-textarea" contenteditable="true"></div></body></html>` }));
 
@@ -37,6 +39,11 @@ try {
   assert.match(key, /^[0-9a-f]{8}(-[0-9a-f]{8}){7}$/);
   step("vault created, recovery key shown");
   await panel.click("text=I saved it, continue");
+  const status = () => panel.evaluate(() => chrome.runtime.sendMessage({ type: "status" }));
+  for (let i = 0; i < 60 && (await status()).status.model === "unknown"; i++) await panel.waitForTimeout(500);
+  const st = (await status()).status;
+  assert.equal(st.model, "ready", `on-device model failed to load: ${JSON.stringify(st)}`);
+  step("on-device embedding model loaded (hybrid search on)");
   await panel.click("text=Settings");
   await panel.locator("label", { hasText: "chatgpt.com" }).locator("input").check();
   step("capture enabled for chatgpt.com");
@@ -62,6 +69,17 @@ try {
   await panel.locator(".card", { hasText: "Ignore all previous" }).waitFor({ timeout: 5000 });
   assert.equal(await panel.locator(".card", { hasText: "vegetarian" }).count(), 0);
   step("injected instruction held in Review, not served");
+
+  // Semantic recall among many memories: no shared keyword between the query and the allergy.
+  for (const t of ["My sister Maya lives in Lisbon.", "I work as a data engineer at a logistics company.",
+    "I run 10k every Sunday morning.", "My laptop is a 2021 MacBook Pro.", "I'm learning Spanish on Duolingo.",
+    "My daughter starts kindergarten in September.", "I drive a blue Honda Civic.", "I prefer window seats on flights.",
+    "My rent went up to 2,100 dollars.", "I'm planning a trip to Kyoto next spring.", "I play chess online most evenings."]) {
+    await panel.evaluate((text) => chrome.runtime.sendMessage({ type: "add", text }), t);
+  }
+  const sem = await panel.evaluate(() => chrome.runtime.sendMessage({ type: "context", query: "Which nuts must I avoid eating?" }));
+  assert.match(sem.context, /peanuts/, "hybrid search should rank the allergy into the top results");
+  step("meaning-based recall finds the peanut allergy among 13 memories");
 
   await site.click("#prompt-textarea");
   await site.keyboard.type("What should I cook for dinner tonight as a vegetarian?");
@@ -91,8 +109,46 @@ try {
     const r = indexedDB.open("aegismem");
     r.onsuccess = () => { const g = r.result.transaction("memories").objectStore("memories").count(); g.onsuccess = () => res(g.result); };
   }));
-  assert.equal(left, 1); // only the pending (unapproved) item remains
+  assert.equal(left, 12); // pending item + 11 manual memories remain
   step("delete works");
+  // Capture path 2 (Enter in the editor) on Claude, and inserted context is never re-captured.
+  await panel.click("text=Settings");
+  await panel.locator("label", { hasText: "claude.ai" }).locator("input").check();
+  const claude = await ctx.newPage();
+  await claude.goto("https://claude.ai/new");
+  await claude.waitForSelector("#aegismem-btn");
+  await claude.click(".ProseMirror");
+  await claude.keyboard.type("I just adopted a beagle puppy named Biscuit.");
+  await claude.keyboard.press("Enter");
+  await claude.waitForTimeout(1200);
+  const after = await panel.evaluate(() => chrome.runtime.sendMessage({ type: "list" }));
+  assert.ok(after.memories.some((m) => m.text.includes("Biscuit") && m.source.site === "claude.ai"), "Enter-time capture on claude.ai");
+  step("captured on Enter in Claude's editor (selector-independent path)");
+  await claude.evaluate(() => (document.querySelector(".ProseMirror").innerText = ""));
+  await claude.click(".ProseMirror");
+  await claude.keyboard.type("Any tips for my dog Biscuit?");
+  await claude.click("#aegismem-btn");
+  await claude.waitForTimeout(600);
+  await claude.click(".ProseMirror");
+  await claude.keyboard.press("End");
+  await claude.keyboard.press("Enter");
+  await claude.waitForTimeout(1200);
+  const after2 = await panel.evaluate(() => chrome.runtime.sendMessage({ type: "list" }));
+  assert.equal(after2.memories.length, after.memories.length, "inserted memories must not be captured again");
+  step("inserted memory block is not re-captured");
+
+  // Lock, wrong passphrase, unlock: data persists. Then change passphrase.
+  await panel.evaluate(() => chrome.runtime.sendMessage({ type: "lock" }));
+  assert.equal((await panel.evaluate(() => chrome.runtime.sendMessage({ type: "context", query: "dog" }))).error, "locked");
+  assert.equal((await panel.evaluate(() => chrome.runtime.sendMessage({ type: "unlock", passphrase: "nope nope nope" }))).ok, false);
+  assert.ok((await panel.evaluate(() => chrome.runtime.sendMessage({ type: "unlock", passphrase: "correct horse battery" }))).ok);
+  assert.equal((await panel.evaluate(() => chrome.runtime.sendMessage({ type: "list" }))).memories.length, after2.memories.length);
+  step("lock → wrong passphrase rejected → unlock, all memories intact");
+  assert.ok((await panel.evaluate(() => chrome.runtime.sendMessage({ type: "changePassphrase", current: "correct horse battery", next: "an even better passphrase" }))).ok);
+  await panel.evaluate(() => chrome.runtime.sendMessage({ type: "lock" }));
+  assert.ok((await panel.evaluate(() => chrome.runtime.sendMessage({ type: "unlock", passphrase: "an even better passphrase" }))).ok);
+  step("passphrase change works");
+
   console.log("E2E PASSED");
 } finally {
   await ctx.close();

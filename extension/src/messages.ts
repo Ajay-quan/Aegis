@@ -3,6 +3,7 @@ import type { Memory, Receipt } from "./core/vault";
 
 export interface Settings {
   capture: Record<string, boolean>; // per site, off until the user turns it on
+  autoLockMinutes: number; // 0 = never
 }
 
 export type Request =
@@ -11,6 +12,7 @@ export type Request =
   | { type: "unlock"; passphrase: string }
   | { type: "recover"; recoveryKey: string; newPassphrase: string }
   | { type: "lock" }
+  | { type: "changePassphrase"; current: string; next: string }
   | { type: "capture"; text: string; site: string; url: string }
   | { type: "context"; query: string }
   | { type: "list" }
@@ -27,6 +29,9 @@ export interface Status {
   exists: boolean;
   unlocked: boolean;
   settings: Settings;
+  search: "hybrid" | "keyword";
+  model: "unknown" | "ready" | "unavailable";
+  modelError?: string;
 }
 
 export type Response =

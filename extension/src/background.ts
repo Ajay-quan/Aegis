@@ -7,12 +7,50 @@
 import { Vault } from "./core/vault";
 import { b64, unb64 } from "./core/crypto";
 import type { Request, Response, Settings } from "./messages";
+import { ADAPTERS } from "./content/adapters";
+import { allowed, isTrusted } from "./trust";
 
 const vault = new Vault();
-const DEFAULT: Settings = { capture: { "chatgpt.com": false, "claude.ai": false } };
-const PANEL_ONLY = new Set(["setup", "unlock", "recover", "lock", "list", "add", "approve", "edit", "category", "forget", "forgetAll", "export", "settings"]);
+
+// On-device embeddings run in an offscreen document (WebAssembly ML is not reliable in a service worker).
+let creating: Promise<void> | null = null;
+async function ensureOffscreen(): Promise<void> {
+  const url = chrome.runtime.getURL("offscreen.html");
+  const existing = await chrome.runtime.getContexts?.({ contextTypes: ["OFFSCREEN_DOCUMENT" as chrome.runtime.ContextType], documentUrls: [url] });
+  if (existing?.length) return;
+  creating ??= chrome.offscreen
+    .createDocument({ url, reasons: [chrome.offscreen.Reason.WORKERS], justification: "Run the on-device embedding model" })
+    .finally(() => (creating = null));
+  await creating;
+}
+vault.embedder = async (texts) => {
+  await ensureOffscreen();
+  const r = await chrome.runtime.sendMessage({ target: "offscreen", type: "embed", texts });
+  if (!r?.ok) throw new Error(r?.error ?? "embedding failed");
+  return r.vectors;
+};
+let modelStatus: "unknown" | "ready" | "unavailable" = "unknown";
+let modelError = "";
+async function warmModel(): Promise<void> {
+  try {
+    await vault.embedder!(["warm up"]);
+    modelStatus = "ready";
+    await vault.embedMissing();
+  } catch (e) {
+    modelStatus = "unavailable";
+    modelError = (e as Error).message;
+    console.error("AegisMem: embedding model unavailable:", modelError);
+  }
+}
+const DEFAULT: Settings = {
+  capture: Object.fromEntries(ADAPTERS.map((a) => [a.site, false])),
+  autoLockMinutes: 30,
+};
 
 chrome.storage.session.setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" });
+chrome.runtime.onInstalled.addListener((d) => {
+  if (d.reason === "install") void chrome.tabs.create({ url: chrome.runtime.getURL("panel.html?welcome=1") });
+});
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
 async function settings(): Promise<Settings> {
@@ -23,7 +61,10 @@ async function settings(): Promise<Settings> {
 async function ensureResumed(): Promise<void> {
   if (vault.unlocked) return;
   const { dek } = await chrome.storage.session.get("dek");
-  if (dek) await vault.resume(unb64(dek));
+  if (dek) {
+    await vault.resume(unb64(dek));
+    void warmModel();
+  }
 }
 
 async function remember(): Promise<void> {
@@ -31,31 +72,55 @@ async function remember(): Promise<void> {
   if (k) await chrome.storage.session.set({ dek: b64(k) });
 }
 
+async function lockNow(): Promise<void> {
+  vault.lock();
+  modelStatus = "unknown";
+  await chrome.storage.session.remove(["dek", "lastActive"]);
+}
+
+// Auto-lock after inactivity. Activity = any request from the panel or a page. Alarms wake the worker.
+chrome.alarms.create("autolock", { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener(async (a) => {
+  if (a.name !== "autolock") return;
+  const { autoLockMinutes } = await settings();
+  const { lastActive, dek } = await chrome.storage.session.get(["lastActive", "dek"]);
+  if (dek && autoLockMinutes > 0 && Date.now() - (lastActive ?? 0) > autoLockMinutes * 60_000) await lockNow();
+});
+
 async function handle(req: Request, sender: chrome.runtime.MessageSender): Promise<Response> {
   // Only the extension's own pages are trusted. Content scripts run inside web pages (their sender
   // URL is the page's), and may only capture and request context.
-  const fromPage = !(sender.id === chrome.runtime.id && sender.url?.startsWith(chrome.runtime.getURL("")));
-  if (fromPage && PANEL_ONLY.has(req.type)) return { ok: false, error: "not allowed from a web page" };
+  if (!allowed(req.type, isTrusted(sender, chrome.runtime.id, chrome.runtime.getURL("")))) {
+    return { ok: false, error: "not allowed from a web page" };
+  }
+  // Messages addressed to the offscreen document are not for us.
+  if ((req as { target?: string }).target === "offscreen") return { ok: true };
   await ensureResumed();
+  if (req.type !== "status") await chrome.storage.session.set({ lastActive: Date.now() });
   switch (req.type) {
     case "status":
-      return { ok: true, status: { exists: await Vault.exists(), unlocked: vault.unlocked, settings: await settings() } };
+      return { ok: true, status: { exists: await Vault.exists(), unlocked: vault.unlocked, settings: await settings(), search: modelStatus === "ready" ? "hybrid" : "keyword", model: modelStatus, modelError } };
     case "setup": {
       const recoveryKey = await vault.setup(req.passphrase);
       await remember();
+      void warmModel();
       return { ok: true, recoveryKey };
     }
     case "unlock":
       await vault.unlock(req.passphrase);
       await remember();
+      void warmModel();
       return { ok: true };
     case "recover":
       await vault.recover(req.recoveryKey, req.newPassphrase);
       await remember();
+      void warmModel();
       return { ok: true };
     case "lock":
-      vault.lock();
-      await chrome.storage.session.remove("dek");
+      await lockNow();
+      return { ok: true };
+    case "changePassphrase":
+      await vault.changePassphrase(req.current, req.next);
       return { ok: true };
     case "capture": {
       if (!vault.unlocked) return { ok: false, error: "locked" };
@@ -66,7 +131,7 @@ async function handle(req: Request, sender: chrome.runtime.MessageSender): Promi
     }
     case "context":
       if (!vault.unlocked) return { ok: false, error: "locked" };
-      return { ok: true, context: vault.context(req.query) };
+      return { ok: true, context: await vault.context(req.query) };
     case "list":
       return { ok: true, memories: vault.list() };
     case "add":
@@ -100,6 +165,7 @@ async function handle(req: Request, sender: chrome.runtime.MessageSender): Promi
 }
 
 chrome.runtime.onMessage.addListener((req: Request, sender, reply) => {
+  if ((req as { target?: string }).target === "offscreen") return false;
   handle(req, sender)
     .then(reply)
     .catch((e: Error) => reply({ ok: false, error: e.message }));

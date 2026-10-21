@@ -7,7 +7,9 @@
     "build": "node build.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "e2e": "node build.mjs && node e2e/extension.e2e.mjs"
+    "e2e": "node build.mjs && node e2e/extension.e2e.mjs",
+    "package": "node package.mjs",
+    "eval": "node eval/run.mjs"
   },
   "devDependencies": {
     "@types/chrome": "0.0.287",
@@ -16,5 +18,8 @@
     "playwright-core": "^1.56.1",
     "typescript": "5.7.3",
     "vitest": "2.1.8"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.1"
   }
 }

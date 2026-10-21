@@ -1,0 +1,53 @@
+{
+  "dataset": "LongMemEval-S cleaned (MIT), dev split, non-abstention",
+  "questions": 20,
+  "capture": {
+    "mean": 1,
+    "lo": 1,
+    "hi": 1,
+    "n": 20
+  },
+  "overall": {
+    "hybrid": {
+      "mean": 0.95,
+      "lo": 0.8,
+      "hi": 1,
+      "n": 20
+    },
+    "keyword": {
+      "mean": 0.9,
+      "lo": 0.75,
+      "hi": 1,
+      "n": 20
+    },
+    "meaning": {
+      "mean": 0.9,
+      "lo": 0.75,
+      "hi": 1,
+      "n": 20
+    },
+    "raw_bm25": {
+      "mean": 0.9,
+      "lo": 0.75,
+      "hi": 1,
+      "n": 20
+    }
+  },
+  "hybrid_minus_keyword": {
+    "mean": 0.05,
+    "lo": 0,
+    "hi": 0.15,
+    "n": 20
+  },
+  "by_type": {
+    "single-session-user": {
+      "n": 20,
+      "capture": 1,
+      "hybrid": 0.95,
+      "keyword": 0.9,
+      "meaning": 0.9,
+      "raw_bm25": 0.9
+    }
+  },
+  "mean_memories_per_user": 298.25
+}

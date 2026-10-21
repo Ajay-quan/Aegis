@@ -10,14 +10,36 @@ import { send } from "../messages";
 const adapter = adapterFor(location.hostname);
 const seen = new Set<string>();
 
+const CONTEXT_HEADER = "Context from my personal memory (AegisMem).";
+function capture(text: string): void {
+  let t = text.trim();
+  if (t.startsWith(CONTEXT_HEADER)) {
+    const end = t.indexOf("\n\n");
+    t = end < 0 ? "" : t.slice(end + 2).trim(); // never re-capture inserted memories
+  }
+  if (!adapter || !t || seen.has(t)) return;
+  seen.add(t);
+  send({ type: "capture", text: t, site: adapter.site, url: location.href }).catch(() => {});
+}
+
+function draftText(input: HTMLElement): string {
+  return (input instanceof HTMLTextAreaElement ? input.value : input.innerText).trim();
+}
+
+// Path 2: capture what the user is sending when they press Enter, independent of how the site renders it.
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (!adapter || e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+    const input = (e.target as HTMLElement | null)?.closest?.(adapter.input) as HTMLElement | null;
+    if (input) capture(draftText(input));
+  },
+  true,
+);
+
 function captureNew(): void {
   if (!adapter) return;
-  for (const el of document.querySelectorAll<HTMLElement>(adapter.userMessage)) {
-    const text = el.innerText.trim();
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    send({ type: "capture", text, site: adapter.site, url: location.href }).catch(() => {});
-  }
+  for (const el of document.querySelectorAll<HTMLElement>(adapter.userMessage)) capture(el.innerText);
 }
 
 let timer: number | undefined;
@@ -40,7 +62,7 @@ async function insertMemories(): Promise<void> {
   if (!adapter) return;
   const input = document.querySelector<HTMLElement>(adapter.input);
   if (!input) return toast("AegisMem: couldn't find the message box on this page.");
-  const draft = (input instanceof HTMLTextAreaElement ? input.value : input.innerText).trim();
+  const draft = draftText(input);
   if (!draft) return toast("AegisMem: type your message first, then click to add relevant memories.");
   const res = await send({ type: "context", query: draft });
   if (!res.ok) return toast(res.error === "locked" ? "AegisMem is locked. Open the side panel to unlock." : `AegisMem: ${res.error}`);

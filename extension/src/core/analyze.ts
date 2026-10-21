@@ -112,12 +112,22 @@ export function categorize(text: string): Category {
   return "other";
 }
 
-/** First-person statements about the user are worth remembering; questions and boilerplate are not. */
+const REQUEST = /^(can|could|would|will) you\b|^(please|pls|help me|tell me|show me|give me|write|explain|summari[sz]e|list|generate|create|make|translate|fix|draft|suggest|recommend|describe|compare)\b|^(what|how|why|which|where|when|who|is|are|do|does|should|any)\b/i;
+const SMALL_TALK = /^(hi|hello|hey|thanks|thank you|thx|ok|okay|great|cool|awesome|sounds good|got it|perfect|nice|sure|yes|no)\b[\s!.,]*\S{0,40}$/i;
+
+/**
+ * A statement the user makes about themselves is worth remembering, however it is phrased
+ * ("The play I attended was…", "a playlist I created called…"). Questions, requests to the AI and
+ * small talk are not. Measured on LongMemEval (eval/longmemeval.ts): a cue-word allow-list captured
+ * almost none of the real evidence, so this is a block-list instead.
+ */
 export function isMemorable(text: string): boolean {
   const t = text.trim();
-  if (t.length < 12 || t.length > 2000) return false;
-  if (!/\b(i|i'm|i've|i'd|i'll|my|me|we|our)\b/i.test(t)) return false;
-  return categorize(t) !== "other" || /\b(i (have|had|got|use|own|need)|my )\b/i.test(t);
+  if (t.length < 15 || t.length > 1500) return false;
+  if (t.endsWith("?")) return false;
+  if (!/\b(i|i'm|i've|i'd|i'll|im|my|me|mine|we|we're|we've|our|us)\b/i.test(t)) return false;
+  if (REQUEST.test(t) || SMALL_TALK.test(t)) return false;
+  return true;
 }
 
 /** Split a message into sentence-sized candidate facts. */

@@ -5,13 +5,14 @@
   "version": "0.1.0",
   "description": "Encrypted, on-device memory that follows you across ChatGPT and Claude. You see, edit and delete everything.",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "sidePanel", "unlimitedStorage"],
-  "host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*"],
+  "permissions": ["storage", "sidePanel", "unlimitedStorage", "offscreen", "alarms"],
+  "host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*", "https://www.perplexity.ai/*"],
   "background": { "service_worker": "background.js", "type": "module" },
   "side_panel": { "default_path": "panel.html" },
-  "action": { "default_title": "Open AegisMem" },
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "action": { "default_title": "Open AegisMem", "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" } },
   "content_scripts": [
-    { "matches": ["https://chatgpt.com/*", "https://claude.ai/*"], "js": ["content.js"], "run_at": "document_idle" }
+    { "matches": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*", "https://www.perplexity.ai/*"], "js": ["content.js"], "run_at": "document_idle" }
   ],
-  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" }
+  "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" }
 }

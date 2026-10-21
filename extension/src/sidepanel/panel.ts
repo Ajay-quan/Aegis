@@ -1,11 +1,14 @@
 import { CATEGORIES, type Category } from "../core/analyze";
 import type { Memory } from "../core/vault";
 import { send, type Settings } from "../messages";
+import { ADAPTERS } from "../content/adapters";
 
 const app = document.getElementById("app")!;
 const lockstate = document.getElementById("lockstate")!;
 let tab: "memories" | "review" | "settings" = "memories";
 let filter: Category | "" = "";
+let query = "";
+const PAGE = 100;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}, ...kids: (Node | string)[]): HTMLElementTagNameMap[K] {
   const e = Object.assign(document.createElement(tag), props);
@@ -17,10 +20,24 @@ function errorLine(): HTMLParagraphElement {
   return el("p", { className: "err" });
 }
 
+async function refreshState(): Promise<void> {
+  const r = await send({ type: "status" });
+  if (r.ok && r.status?.unlocked) {
+    lockstate.textContent = r.status.model === "ready" ? "Unlocked · smart search on"
+      : r.status.model === "unavailable" ? "Unlocked · keyword search only (model failed to load)"
+      : "Unlocked · loading search model…";
+    if (r.status.model === "unknown") setTimeout(() => void refreshState(), 1500);
+  }
+}
+
 async function render(): Promise<void> {
   const r = await send({ type: "status" });
   if (!r.ok || !r.status) return void app.replaceChildren(el("p", { className: "err" }, "Extension error"));
-  lockstate.textContent = r.status.unlocked ? "Unlocked" : "Locked";
+  lockstate.textContent = !r.status.unlocked ? "Locked"
+    : r.status.model === "ready" ? "Unlocked · smart search on"
+    : r.status.model === "unavailable" ? "Unlocked · keyword search only (model failed to load)"
+    : "Unlocked · loading search model…";
+  if (r.status.unlocked && r.status.model === "unknown") setTimeout(() => void refreshState(), 1500);
   if (!r.status.exists) return setupView();
   if (!r.status.unlocked) return unlockView();
   return mainView(r.status.settings);
@@ -43,8 +60,12 @@ function setupView(): void {
     }
     recoveryView(r.recoveryKey!);
   };
+  const steps = el("ol", { className: "hint" },
+    el("li", {}, "Create a passphrase. It encrypts everything on this device."),
+    el("li", {}, "In Settings, turn on capture for the AI sites you use."),
+    el("li", {}, "Chat as usual. On those sites, click ＋ Memories to add what's relevant to your message."));
   app.replaceChildren(
-    el("h2", {}, "Set up your private memory"),
+    el("h2", {}, "Set up your private memory"), steps,
     el("p", { className: "hint" }, "Everything is encrypted on this device with your passphrase. Nobody else, including AegisMem, can read it. If you lose both your passphrase and recovery key, your memory cannot be recovered."),
     p1, el("div", { className: "row" }), p2, el("div", { className: "row" }, go), err,
   );
@@ -134,10 +155,21 @@ function memoriesTab(ms: Memory[], settings: Settings): HTMLElement {
   sel.append(el("option", { value: "", textContent: "All categories" }));
   for (const c of CATEGORIES) sel.append(el("option", { value: c, textContent: c, selected: c === filter }));
   sel.onchange = () => ((filter = sel.value as Category | ""), void render());
-  wrap.append(add, el("div", { className: "row" }, addBtn, sel));
-  const shown = ms.filter((m) => !filter || m.category === filter);
-  if (!shown.length) wrap.append(el("p", { className: "hint" }, "No memories yet."));
-  for (const m of shown) wrap.append(card(m));
+  const find = el("input", { type: "search", placeholder: "Filter memories…", value: query });
+  find.oninput = () => {
+    query = find.value;
+    void render().then(() => {
+      const f = document.querySelector<HTMLInputElement>('input[type="search"]');
+      f?.focus();
+      f?.setSelectionRange(query.length, query.length);
+    });
+  };
+  wrap.append(add, el("div", { className: "row" }, addBtn, sel), find);
+  const q = query.toLowerCase();
+  const shown = ms.filter((m) => (!filter || m.category === filter) && (!q || m.text.toLowerCase().includes(q)));
+  if (!shown.length) wrap.append(el("p", { className: "hint" }, ms.length ? "No matches." : "No memories yet."));
+  for (const m of shown.slice(0, PAGE)) wrap.append(card(m));
+  if (shown.length > PAGE) wrap.append(el("p", { className: "hint" }, `Showing the newest ${PAGE} of ${shown.length}. Use the filter to find older ones.`));
   return wrap;
 }
 
@@ -185,12 +217,29 @@ function reviewTab(ms: Memory[]): HTMLElement {
 
 function settingsTab(s: Settings): HTMLElement {
   const wrap = el("div", {}, el("h2", {}, "Capture"), el("p", { className: "hint" }, "When on, messages you send on that site are scanned on this device and memorable facts about you are saved, encrypted. AI replies are not saved."));
-  for (const site of Object.keys(s.capture)) {
-    const box = el("input", { type: "checkbox", checked: s.capture[site] });
+  for (const a of ADAPTERS) {
+    const box = el("input", { type: "checkbox", checked: !!s.capture[a.site] });
     box.style.width = "auto";
-    box.onchange = async () => void (await send({ type: "settings", set: { capture: { [site]: box.checked } } }));
-    wrap.append(el("label", { className: "row" }, box, site));
+    box.onchange = async () => void (await send({ type: "settings", set: { capture: { [a.site]: box.checked } } }));
+    wrap.append(el("label", { className: "row" }, box, `${a.label} · ${a.site}`));
   }
+  const lockSel = el("select");
+  for (const [v, label] of [[5, "5 minutes"], [15, "15 minutes"], [30, "30 minutes"], [120, "2 hours"], [0, "Never (until browser closes)"]] as const) {
+    lockSel.append(el("option", { value: String(v), textContent: label, selected: s.autoLockMinutes === v }));
+  }
+  lockSel.onchange = async () => void (await send({ type: "settings", set: { autoLockMinutes: Number(lockSel.value) } }));
+  wrap.append(el("h2", {}, "Auto-lock after inactivity"), lockSel,
+    el("p", { className: "hint" }, "The vault always locks when the browser closes."));
+  const cur = el("input", { type: "password", placeholder: "Current passphrase" });
+  const nxt = el("input", { type: "password", placeholder: "New passphrase (10+ characters)" });
+  const msg = el("p", { className: "hint" });
+  const chg = el("button", { textContent: "Change passphrase" });
+  chg.onclick = async () => {
+    const r = await send({ type: "changePassphrase", current: cur.value, next: nxt.value });
+    msg.textContent = r.ok ? "Passphrase changed. Your recovery key still works." : r.error;
+    if (r.ok) cur.value = nxt.value = "";
+  };
+  wrap.append(el("h2", {}, "Passphrase"), cur, el("div", { className: "row" }), nxt, el("div", { className: "row" }, chg), msg);
   const exp = el("button", { textContent: "Export (unencrypted JSON)" });
   exp.onclick = async () => {
     const r = await send({ type: "export" });

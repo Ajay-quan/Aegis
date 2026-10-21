@@ -11,6 +11,7 @@
 import { categorize, isMemorable, redact, screen, sentences, slotOf, type Category } from "./analyze";
 import { createVault, openJson, sealJson, unlockWithPassphrase, unlockWithRecovery, changePassphrase } from "./crypto";
 import { BM25, jaccard } from "./search";
+import { cosine, type Embedder } from "./vector";
 import { store } from "./store";
 
 export type Status = "active" | "pending" | "retired";
@@ -26,6 +27,7 @@ export interface Memory {
   redactions: string[];
   flags: string[]; // matched injection phrases, if any
   slot?: string; // single-valued fact this memory sets (residence, employer, diet, relationship)
+  vec?: number[]; // on-device embedding (encrypted with the record)
   updates?: string; // id of an older memory this one appears to update
   updatedBy?: string;
 }
@@ -38,6 +40,17 @@ export interface Receipt {
 }
 
 const DUPLICATE = 0.8;
+// Hybrid relevance = (1 - W) * min-max(dense) + W * min-max(BM25), the "convex 0.7" configuration
+// that beat BM25 on the LongMemEval dev split in the main repo (bench/retrieval_ablation.py).
+export const LEXICAL_WEIGHT = 0.7;
+const POOL = 50;
+
+function minmax(xs: Map<string, number>): Map<string, number> {
+  const v = [...xs.values()];
+  const lo = Math.min(...v);
+  const hi = Math.max(...v);
+  return new Map([...xs].map(([k, x]) => [k, hi > lo ? (x - lo) / (hi - lo) : 1]));
+}
 const SAME_SUBJECT = 0.3;
 
 async function sha256(s: string): Promise<string> {
@@ -49,6 +62,9 @@ export class Vault {
   private dek: CryptoKey | null = null;
   private dekRaw: Uint8Array | null = null;
   private mem = new Map<string, Memory>();
+  /** Optional on-device embedder. Without it (or if it fails) search is keyword-only, and says so. */
+  embedder: Embedder | null = null;
+  lastSearchMode: "hybrid" | "keyword" = "keyword";
 
   get unlocked(): boolean {
     return this.dek !== null;
@@ -102,6 +118,18 @@ export class Vault {
 
   exportSessionKey(): Uint8Array | null {
     return this.dekRaw;
+  }
+
+  async changePassphrase(current: string, next: string): Promise<void> {
+    const env = await store.getEnvelope();
+    if (!env) throw new Error("No vault on this device");
+    let raw: Uint8Array;
+    try {
+      raw = (await unlockWithPassphrase(env, current)).dekRaw;
+    } catch {
+      throw new Error("Current passphrase is wrong");
+    }
+    await store.putEnvelope(await changePassphrase(env, raw, next));
   }
 
   lock(): void {
@@ -176,14 +204,59 @@ export class Vault {
       await this.save(m);
       created.push(m);
     }
+    if (created.length) await this.embedMissing(created);
     return created;
   }
 
+  /** Embed memories that have no vector yet (new ones, or ones stored before the model was available). */
+  async embedMissing(only?: Memory[]): Promise<number> {
+    if (!this.embedder) return 0;
+    const todo = (only ?? [...this.mem.values()]).filter((m) => !m.vec);
+    for (let i = 0; i < todo.length; i += 32) {
+      const batch = todo.slice(i, i + 32);
+      try {
+        const vecs = await this.embedder(batch.map((m) => m.text));
+        for (let j = 0; j < batch.length; j++) {
+          const cur = this.mem.get(batch[j].id);
+          if (cur) await this.save({ ...cur, vec: vecs[j] });
+        }
+      } catch {
+        return i; // model unavailable: memories stay searchable by keyword and get embedded later
+      }
+    }
+    return todo.length;
+  }
+
   /** Relevant, servable memories for a prompt. Pending and retired memories are never returned. */
-  search(query: string, topK = 6): Memory[] {
+  async search(query: string, topK = 6, lexicalWeight = LEXICAL_WEIGHT): Promise<Memory[]> {
     const active = this.list({ status: "active" });
-    const hits = new BM25(active.map((m) => ({ id: m.id, text: `${m.category} ${m.text}` }))).search(query, topK);
-    const out = hits.map((h) => this.mem.get(h.id)!);
+    if (!active.length) return [];
+    const lex = new Map(
+      new BM25(active.map((m) => ({ id: m.id, text: `${m.category} ${m.text}` }))).search(query, POOL).map((h) => [h.id, h.score]),
+    );
+    let dense = new Map<string, number>();
+    this.lastSearchMode = "keyword";
+    if (this.embedder) {
+      try {
+        const [qv] = await this.embedder([query]);
+        dense = new Map(
+          active.filter((m) => m.vec).map((m) => [m.id, cosine(qv, m.vec!)] as [string, number])
+            .sort((a, b) => b[1] - a[1]).slice(0, POOL),
+        );
+        this.lastSearchMode = "hybrid";
+      } catch {
+        dense = new Map();
+      }
+    }
+    const ln = lex.size ? minmax(lex) : new Map<string, number>();
+    const dn = dense.size ? minmax(dense) : new Map<string, number>();
+    const w = dense.size ? lexicalWeight : 1;
+    const ids = new Set([...ln.keys(), ...dn.keys()]);
+    const ranked = [...ids]
+      .map((id) => ({ id, s: w * (ln.get(id) ?? 0) + (1 - w) * (dn.get(id) ?? 0) }))
+      .sort((a, b) => b.s - a.s)
+      .slice(0, topK);
+    const out = ranked.map((r) => this.mem.get(r.id)!);
     // If a hit has a newer version, include it, so the reader sees the change.
     for (const m of [...out]) {
       const newer = m.updatedBy ? this.mem.get(m.updatedBy) : undefined;
@@ -193,8 +266,8 @@ export class Vault {
   }
 
   /** Context block for an AI prompt: oldest first, dated, later entries are current. */
-  context(query: string, topK = 6): string {
-    const ms = this.search(query, topK).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  async context(query: string, topK = 6): Promise<string> {
+    const ms = (await this.search(query, topK)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     if (!ms.length) return "";
     const lines = ms.map((m) => `- [${m.createdAt.slice(0, 10)}] ${m.text}`);
     return [
@@ -212,9 +285,10 @@ export class Vault {
     const m = this.mem.get(id);
     if (!m) throw new Error("Not found");
     const { text: clean, kinds } = redact(text.trim());
-    const next = { ...m, text: clean, category: categorize(clean), redactions: kinds };
+    const next: Memory = { ...m, text: clean, category: categorize(clean), redactions: kinds, slot: slotOf(clean), vec: undefined };
     await this.save(next);
-    return next;
+    await this.embedMissing([next]);
+    return this.mem.get(next.id)!;
   }
 
   async setCategory(id: string, category: Category): Promise<void> {
@@ -245,6 +319,7 @@ export class Vault {
 
   /** Plaintext export, only on the user's explicit request. */
   exportJson(): string {
-    return JSON.stringify({ exportedAt: new Date().toISOString(), memories: this.list() }, null, 2);
+    const memories = this.list().map(({ vec: _vec, ...m }) => m);
+    return JSON.stringify({ exportedAt: new Date().toISOString(), memories }, null, 2);
   }
 }
