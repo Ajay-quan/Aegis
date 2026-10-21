@@ -517,3 +517,26 @@ Ollama `nomic-embed-text` (768-d), a Docker Compose stack in staging config (:58
    - Knowledge update: 74% (aegis_ctx 86%, oracle 71%).
    - Weakest types: multi-session (33%) and temporal reasoning (38%).
    - **Judge bug caught:** gemma4 "thinking" consumed `num_predict=8` and returned empty text, which was scored as "no" (judged accuracy about 0%). Fixed with `think: false`; empty output now raises an error; verdicts must start with yes or no.
+
+## Session 12 — 2026-10-21: Pivot to a free Chrome extension (v0.1 built)
+
+**Decision (user):** make AegisMem a free Chrome extension, not a repository users clone. It should capture context from conversations, categorize it, learn about the user, and be encrypted so that even AegisMem cannot read it. A desktop app (Tauri + MCP) comes later as a companion. Deadlines should be tighter.
+
+**Built** (`extension/`, branch `feature/chrome-extension`, commit `4f14934`):
+- **Vault.** Zero-knowledge encryption: AES-256-GCM data key, wrapped by a PBKDF2-600k passphrase key and by a recovery key. Storage is IndexedDB, ciphertext only.
+- **Capture.** First-person facts from the user's own messages on ChatGPT and Claude, opt-in per site. Includes on-device PII redaction and rule-based injection screening, so held items go to Review.
+- **Updates.** Slot-based linking for single-valued facts (residence, employer, diet, relationship).
+- **Recall.** BM25, plus a visible "＋ Memories" insertion into the draft.
+- **Side panel.** View, edit, recategorize, delete with verified removal, export, wipe, lock.
+- **Trust.** Only extension pages are trusted (by origin); web pages can only capture and request context.
+- **Tests.** 10 unit tests, plus a real-Chromium end-to-end test (stand-in chatgpt.com page) that passed 3/3.
+
+**Bugs found by the tests:**
+- The trust check used `sender.tab`, which locked out the panel when opened in a tab. Fixed: check by origin.
+- Health keywords had a trailing word boundary, so "allergic" never matched.
+- Word-overlap update linking missed "live in Austin" → "live in Denver". Replaced by slots.
+
+**Next:**
+- On-device embeddings with hybrid fusion (port of the validated convex 0.7).
+- On-device categorization model, evaluated on real data.
+- Store listing and privacy policy.
