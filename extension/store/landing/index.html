@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AegisMem: search all your AI chats</title>
+<meta name="description" content="One search across every ChatGPT, Claude, Gemini and Perplexity chat you've had. Continue any chat in another AI. Private: encrypted on your device.">
+<style>
+  :root { --bg:#ffffff; --fg:#14161b; --muted:#5b6170; --line:#e6e8ee; --soft:#f5f6fa; --accent:#4f46e5; --accent-fg:#fff; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0e1014; --fg:#e8eaef; --muted:#a3a9b6; --line:#262a33; --soft:#161920; --accent:#8b85ff; --accent-fg:#0e1014; } }
+  :root[data-theme="dark"] { --bg:#0e1014; --fg:#e8eaef; --muted:#a3a9b6; --line:#262a33; --soft:#161920; --accent:#8b85ff; --accent-fg:#0e1014; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  header { display:flex; justify-content:space-between; align-items:center; padding:18px 0; }
+  .brand { display:flex; gap:10px; align-items:center; font-weight:700; }
+  .brand img { width:28px; height:28px; }
+  h1 { font-size: clamp(30px, 5vw, 48px); line-height:1.1; margin: 48px 0 16px; letter-spacing:-.02em; }
+  .lead { font-size: 19px; color: var(--muted); max-width: 680px; }
+  .cta { display:inline-block; background:var(--accent); color:var(--accent-fg); padding:12px 20px; border-radius:10px; font-weight:600; text-decoration:none; margin: 20px 12px 0 0; }
+  .cta.secondary { background:transparent; color:var(--fg); border:1px solid var(--line); }
+  .shot { margin: 40px 0; border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+  .shot img { display:block; width:100%; height:auto; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; margin: 32px 0; }
+  .card { background:var(--soft); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .card h3 { margin:0 0 6px; font-size:17px; }
+  .card p { margin:0; color:var(--muted); font-size:15px; }
+  h2 { font-size: 26px; margin: 56px 0 8px; }
+  table { width:100%; border-collapse: collapse; font-size: 15px; }
+  td, th { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align: top; }
+  .muted { color: var(--muted); }
+  footer { margin: 64px 0 40px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><div class="brand"><img src="../../static/icons/icon128.png" alt="">AegisMem</div><a href="#privacy" class="muted">Privacy</a></header>
+
+  <h1>Every AI chat you've had,<br>searchable in one place.</h1>
+  <p class="lead">You've had hundreds of conversations with ChatGPT, Claude, Gemini and Perplexity. AegisMem finds the one you need in a single search, and carries any chat to another AI in one click. Private: everything stays encrypted on your device.</p>
+  <a class="cta" href="#">Add to Chrome (free)</a><a class="cta secondary" href="#how">How it works</a>
+
+  <div class="shot"><img src="../screenshots/2-search.png" alt="AegisMem search results across Claude and ChatGPT"></div>
+
+  <div class="grid" id="how">
+    <div class="card"><h3>One search, every AI</h3><p>Search by words or meaning across all your chats. Filter by app or date. Jump straight to the message.</p></div>
+    <div class="card"><h3>Your whole history on day one</h3><p>Import the official exports from ChatGPT, Claude and Google (Gemini). New chats are saved automatically.</p></div>
+    <div class="card"><h3>Continue anywhere</h3><p>Hit a usage limit, or want a second opinion? Carry a chat's context to another AI in one click. You review before sending.</p></div>
+    <div class="card"><h3>Private by design</h3><p>No account. No servers. Encrypted on your device. The extension's pages can't even connect to the internet.</p></div>
+  </div>
+
+  <h2 id="privacy">Why you can trust it</h2>
+  <table>
+    <tr><th>What</th><th>How</th></tr>
+    <tr><td>Where your chats live</td><td>Only in your browser, encrypted with AES-256. An optional passphrase is available.</td></tr>
+    <tr><td>Who can read them</td><td>You. We run no servers, so there is nothing for us to see. AI websites never get access to your history.</td></tr>
+    <tr><td>When anything leaves your device</td><td>Only when you click "Continue in…" or "Ask…". The text then goes to the AI you chose, after you press Enter.</td></tr>
+    <tr><td>Secrets in your chats</td><td>API keys and card numbers are masked before saving.</td></tr>
+    <tr><td>Can you verify it?</td><td>The extension's network block is enforced by Chrome itself (Content Security Policy), and automated tests check it on every build. Anyone can inspect the extension's files after installing it.</td></tr>
+  </table>
+
+  <h2>Honest numbers</h2>
+  <p class="muted">On a public benchmark (LongMemEval) with about 10,000 conversations, AegisMem puts the right chat in the top 5 for 56% of questions and responds in about 0.1 seconds. Meaning-based search ties keyword search on that benchmark, so we don't claim it beats it there. It helps when you don't remember the exact words. Full method and caveats are in the README.</p>
+
+  <footer>AegisMem is not affiliated with OpenAI, Anthropic, Google or Perplexity. Product names are trademarks of their owners.</footer>
+</div>
+</body>
+</html>

@@ -368,7 +368,7 @@ async function settingsView(): Promise<void> {
     msg,
     h("div", { class: "card stack small muted" }, h("h2", {}, "Privacy"),
       h("p", {}, "No accounts, servers, analytics or telemetry. Extension pages are blocked by their security policy from connecting to the internet at all. Your chats are read from AI sites you enable, encrypted, and stored only in this browser. Text leaves your device only when you click Continue or Ask, and then only to the AI you picked."),
-      h("p", {}, `Search model: all-MiniLM-L6-v2, on-device. Version ${chrome.runtime.getManifest().version}.`))));
+      h("p", {}, `Search model: Snowflake arctic-embed-xs, on-device. Version ${chrome.runtime.getManifest().version}.`))));
 }
 
 // ---------------------------------------------------------------- wiring

@@ -610,3 +610,59 @@ Ollama `nomic-embed-text` (768-d), a Docker Compose stack in staging config (:58
 - **D5:** speed.
 
 The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its code stays in git history. Branch: `feature/recall`.
+
+### Session 14 — build log (Recall)
+
+**Architecture decisions:**
+- **Library host.** The library lives in the offscreen document; the service worker is only a router and gatekeeper.
+  - *Why:* MV3 service workers die when idle, which would mean decrypting and re-indexing the whole history on every wake.
+- **Search UI only on extension pages** (popup and full app), never as an overlay on AI sites.
+  - *Why:* chatgpt.com scripts could read Claude history rendered into their page.
+- **Content scripts** may only `captureConv` and `takeHandoff` (`src/trust.ts`, unit-tested).
+- **Default encryption:** a device-bound, non-extractable AES-GCM key, so there's no passphrase friction. Passphrase mode is optional and switchable, with re-encryption on switch.
+- **Strict CSP on extension pages** (`connect-src 'self'`): pages *cannot* reach the network. Verified in e2e.
+- **Embedding.** The model runs in a dedicated worker with a priority queue: queries go ahead of bulk work, in 16-chunk slices. Cross-origin isolation enables multi-threaded WASM.
+  - Measured in Chrome (CPU shared with another benchmark): 5 → 20 chunks/s.
+  - Before this change, background indexing blocked saving: 150 conversations took 97–360 s to save.
+- **Import UX.** Conversations are saved and keyword-searchable immediately; meaning vectors are added in the background, with a progress badge.
+
+**Bugs caught by tests (all fixed):**
+- Re-import marked unchanged conversations as updated when no model was present.
+- Results showed "Matched the title" instead of the best message snippet.
+- **Handoff race:** the tab loaded before the handoff was recorded.
+- **Handoff lost on interstitial pages:** a login wall or 403 page consumed it. It is now claimed only once the editor exists.
+- Inline `style` attributes were silently blocked by the strict CSP. Styles are now set via CSSOM.
+- Meaning search returned every conversation. Added a cosine floor (0.25) and a relative cutoff (0.3 × top).
+
+**Tests:**
+- 21 unit tests: importers including branches, split files, zip and the 3 Gemini variants; both key modes; backup; handoff; trust.
+- A 21-step real-Chromium e2e (stable 3/3).
+
+### Session 14 — measurement and release candidate
+
+**"Find that chat" benchmark.** LongMemEval-S, about 10k conversations per split, tuned on dev, test run once.
+
+| Split | System | Ranked first | Top 5 |
+|---|---|---|---|
+| Dev | Keyword | 38.7% | 63.0% |
+| Dev | MiniLM meaning | 23.5% | 45.0% |
+| Dev | MiniLM hybrid | 37.8% | 62.6% |
+| Dev | arctic-xs meaning | 26.5% | 50.4% |
+| Dev | **arctic-xs hybrid 0.7** | **38.7%** | **64.7%** |
+| **Test (232 q)** | **Hybrid** | **34.1% [28.0, 39.2]** | **56.0%** |
+| Test | Keyword | 32.3% | 56.5% |
+| Test | Meaning | 26.3% | 50.0% |
+
+- **Honest result:** hybrid ≈ keyword on this benchmark (+1.7 ranked first, CI [−0.4, +3.9]).
+- **Not claimed:** "smart search beats keyword". LongMemEval questions reuse the chat's own words.
+- **Decision:** ship arctic-embed-xs (Apache-2.0, 22M params; better than MiniLM on dev meaning search).
+- **Tuning experiments that did not beat the baseline on dev:** role weighting, top-3 aggregation, BM25 k1/b. Not adopted.
+- **Performance:**
+  - Contiguous int8 vectors plus heap top-K: latency p95 225 → **145 ms** at about 137k passages.
+  - Embedding moved to a worker with a priority queue.
+  - Cross-origin isolation enables multi-threaded WASM, measured at about 4× faster indexing in Chrome.
+
+**Docs:**
+- `extension/README.md`: measured results and limitations.
+- `store/LISTING.md`, `store/PRIVACY.md`, 4 store screenshots.
+- `store/landing/index.html`: a local landing page, **not published**.

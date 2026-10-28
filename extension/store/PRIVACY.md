@@ -23,7 +23,7 @@ technically blocked (by their Content Security Policy) from connecting to the in
 Before saving, AegisMem masks API keys, payment card numbers, US Social Security numbers and
 "password: …" text in your chats.
 
-The on-device search model (all-MiniLM-L6-v2) is bundled with the extension. It never downloads
+The on-device search model (Snowflake arctic-embed-xs, Apache-2.0) is bundled with the extension. It never downloads
 anything and never sends text anywhere.
 
 ## When text leaves your device

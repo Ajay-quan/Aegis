@@ -1,0 +1,127 @@
+{
+  "dataset": "LongMemEval-S cleaned (MIT), test split, conversation retrieval",
+  "model": "snowflake-arctic-embed-xs",
+  "questions": 232,
+  "conversations": 9964,
+  "chunks": 180879,
+  "latency_ms_hybrid": {
+    "p50": 100.5,
+    "p95": 144.7
+  },
+  "systems": {
+    "keyword": {
+      "hit1": {
+        "mean": 0.3233,
+        "lo": 0.2672,
+        "hi": 0.3836,
+        "n": 232
+      },
+      "hit5": {
+        "mean": 0.5647,
+        "lo": 0.5,
+        "hi": 0.6207,
+        "n": 232
+      },
+      "hit10": {
+        "mean": 0.6595,
+        "lo": 0.5991,
+        "hi": 0.7284,
+        "n": 232
+      },
+      "mrr": {
+        "mean": 0.4415,
+        "lo": 0.3915,
+        "hi": 0.4945,
+        "n": 232
+      },
+      "by_type": {
+        "knowledge-update": 0.811,
+        "multi-session": 0.423,
+        "single-session-assistant": 1,
+        "single-session-preference": 0.176,
+        "single-session-user": 0.5,
+        "temporal-reasoning": 0.458
+      }
+    },
+    "meaning": {
+      "hit1": {
+        "mean": 0.2629,
+        "lo": 0.2069,
+        "hi": 0.3147,
+        "n": 232
+      },
+      "hit5": {
+        "mean": 0.5,
+        "lo": 0.4224,
+        "hi": 0.5603,
+        "n": 232
+      },
+      "hit10": {
+        "mean": 0.6034,
+        "lo": 0.5345,
+        "hi": 0.6595,
+        "n": 232
+      },
+      "mrr": {
+        "mean": 0.3703,
+        "lo": 0.3167,
+        "hi": 0.4118,
+        "n": 232
+      },
+      "by_type": {
+        "knowledge-update": 0.757,
+        "multi-session": 0.423,
+        "single-session-assistant": 1,
+        "single-session-preference": 0.176,
+        "single-session-user": 0.278,
+        "temporal-reasoning": 0.373
+      }
+    },
+    "hybrid@0.7": {
+      "hit1": {
+        "mean": 0.3405,
+        "lo": 0.2802,
+        "hi": 0.3922,
+        "n": 232
+      },
+      "hit5": {
+        "mean": 0.5603,
+        "lo": 0.4914,
+        "hi": 0.6207,
+        "n": 232
+      },
+      "hit10": {
+        "mean": 0.6853,
+        "lo": 0.625,
+        "hi": 0.7371,
+        "n": 232
+      },
+      "mrr": {
+        "mean": 0.4554,
+        "lo": 0.4025,
+        "hi": 0.5049,
+        "n": 232
+      },
+      "by_type": {
+        "knowledge-update": 0.838,
+        "multi-session": 0.385,
+        "single-session-assistant": 1,
+        "single-session-preference": 0.176,
+        "single-session-user": 0.444,
+        "temporal-reasoning": 0.491
+      }
+    }
+  },
+  "hybrid_minus_keyword_hit1": {
+    "mean": 0.0172,
+    "lo": -0.0043,
+    "hi": 0.0388,
+    "n": 232
+  },
+  "hybrid_minus_meaning_hit1": {
+    "mean": 0.0776,
+    "lo": 0.0302,
+    "hi": 0.125,
+    "n": 232
+  }
+}
