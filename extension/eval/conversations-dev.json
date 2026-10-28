@@ -1,0 +1,296 @@
+{
+  "dataset": "LongMemEval-S cleaned (MIT), dev split, conversation retrieval",
+  "questions": 238,
+  "conversations": 10170,
+  "chunks": 184512,
+  "latency_ms_hybrid": {
+    "p50": 160.2,
+    "p95": 225.4
+  },
+  "systems": {
+    "keyword": {
+      "hit1": {
+        "mean": 0.3866,
+        "lo": 0.3151,
+        "hi": 0.4496,
+        "n": 238
+      },
+      "hit5": {
+        "mean": 0.6303,
+        "lo": 0.5756,
+        "hi": 0.6891,
+        "n": 238
+      },
+      "hit10": {
+        "mean": 0.7101,
+        "lo": 0.6555,
+        "hi": 0.7689,
+        "n": 238
+      },
+      "mrr": {
+        "mean": 0.4948,
+        "lo": 0.4387,
+        "hi": 0.5496,
+        "n": 238
+      },
+      "by_type": {
+        "knowledge-update": 0.829,
+        "multi-session": 0.522,
+        "single-session-assistant": 0.96,
+        "single-session-preference": 0.077,
+        "single-session-user": 0.679,
+        "temporal-reasoning": 0.603
+      }
+    },
+    "meaning": {
+      "hit1": {
+        "mean": 0.2353,
+        "lo": 0.1807,
+        "hi": 0.2941,
+        "n": 238
+      },
+      "hit5": {
+        "mean": 0.4496,
+        "lo": 0.3992,
+        "hi": 0.5126,
+        "n": 238
+      },
+      "hit10": {
+        "mean": 0.542,
+        "lo": 0.4874,
+        "hi": 0.605,
+        "n": 238
+      },
+      "mrr": {
+        "mean": 0.347,
+        "lo": 0.3012,
+        "hi": 0.4003,
+        "n": 238
+      },
+      "by_type": {
+        "knowledge-update": 0.629,
+        "multi-session": 0.406,
+        "single-session-assistant": 0.96,
+        "single-session-preference": 0.154,
+        "single-session-user": 0.393,
+        "temporal-reasoning": 0.294
+      }
+    },
+    "hybrid@0.3": {
+      "hit1": {
+        "mean": 0.2899,
+        "lo": 0.2395,
+        "hi": 0.3697,
+        "n": 238
+      },
+      "hit5": {
+        "mean": 0.5336,
+        "lo": 0.4832,
+        "hi": 0.5966,
+        "n": 238
+      },
+      "hit10": {
+        "mean": 0.6303,
+        "lo": 0.5798,
+        "hi": 0.6891,
+        "n": 238
+      },
+      "mrr": {
+        "mean": 0.4073,
+        "lo": 0.3623,
+        "hi": 0.4698,
+        "n": 238
+      },
+      "by_type": {
+        "knowledge-update": 0.743,
+        "multi-session": 0.478,
+        "single-session-assistant": 1,
+        "single-session-preference": 0.231,
+        "single-session-user": 0.464,
+        "temporal-reasoning": 0.397
+      }
+    },
+    "hybrid@0.5": {
+      "hit1": {
+        "mean": 0.3319,
+        "lo": 0.2857,
+        "hi": 0.3992,
+        "n": 238
+      },
+      "hit5": {
+        "mean": 0.6008,
+        "lo": 0.5546,
+        "hi": 0.6597,
+        "n": 238
+      },
+      "hit10": {
+        "mean": 0.7101,
+        "lo": 0.6681,
+        "hi": 0.7689,
+        "n": 238
+      },
+      "mrr": {
+        "mean": 0.4606,
+        "lo": 0.4221,
+        "hi": 0.5227,
+        "n": 238
+      },
+      "by_type": {
+        "knowledge-update": 0.8,
+        "multi-session": 0.493,
+        "single-session-assistant": 1,
+        "single-session-preference": 0.154,
+        "single-session-user": 0.607,
+        "temporal-reasoning": 0.544
+      }
+    },
+    "hybrid@0.6": {
+      "hit1": {
+        "mean": 0.3655,
+        "lo": 0.3151,
+        "hi": 0.4328,
+        "n": 238
+      },
+      "hit5": {
+        "mean": 0.6218,
+        "lo": 0.5798,
+        "hi": 0.6807,
+        "n": 238
+      },
+      "hit10": {
+        "mean": 0.7143,
+        "lo": 0.6723,
+        "hi": 0.7731,
+        "n": 238
+      },
+      "mrr": {
+        "mean": 0.4886,
+        "lo": 0.4508,
+        "hi": 0.5479,
+        "n": 238
+      },
+      "by_type": {
+        "knowledge-update": 0.857,
+        "multi-session": 0.493,
+        "single-session-assistant": 0.96,
+        "single-session-preference": 0.154,
+        "single-session-user": 0.679,
+        "temporal-reasoning": 0.574
+      }
+    },
+    "hybrid@0.7": {
+      "hit1": {
+        "mean": 0.3782,
+        "lo": 0.3235,
+        "hi": 0.4496,
+        "n": 238
+      },
+      "hit5": {
+        "mean": 0.6261,
+        "lo": 0.5798,
+        "hi": 0.6849,
+        "n": 238
+      },
+      "hit10": {
+        "mean": 0.7143,
+        "lo": 0.6681,
+        "hi": 0.7689,
+        "n": 238
+      },
+      "mrr": {
+        "mean": 0.4974,
+        "lo": 0.4543,
+        "hi": 0.5605,
+        "n": 238
+      },
+      "by_type": {
+        "knowledge-update": 0.857,
+        "multi-session": 0.493,
+        "single-session-assistant": 0.96,
+        "single-session-preference": 0.077,
+        "single-session-user": 0.714,
+        "temporal-reasoning": 0.588
+      }
+    },
+    "hybrid@0.8": {
+      "hit1": {
+        "mean": 0.3824,
+        "lo": 0.3235,
+        "hi": 0.4538,
+        "n": 238
+      },
+      "hit5": {
+        "mean": 0.6218,
+        "lo": 0.5714,
+        "hi": 0.6807,
+        "n": 238
+      },
+      "hit10": {
+        "mean": 0.7101,
+        "lo": 0.6597,
+        "hi": 0.7689,
+        "n": 238
+      },
+      "mrr": {
+        "mean": 0.5001,
+        "lo": 0.4544,
+        "hi": 0.5601,
+        "n": 238
+      },
+      "by_type": {
+        "knowledge-update": 0.857,
+        "multi-session": 0.493,
+        "single-session-assistant": 0.96,
+        "single-session-preference": 0.077,
+        "single-session-user": 0.679,
+        "temporal-reasoning": 0.588
+      }
+    },
+    "hybrid@0.9": {
+      "hit1": {
+        "mean": 0.3908,
+        "lo": 0.3235,
+        "hi": 0.458,
+        "n": 238
+      },
+      "hit5": {
+        "mean": 0.6218,
+        "lo": 0.5714,
+        "hi": 0.6807,
+        "n": 238
+      },
+      "hit10": {
+        "mean": 0.7101,
+        "lo": 0.6597,
+        "hi": 0.7689,
+        "n": 238
+      },
+      "mrr": {
+        "mean": 0.5015,
+        "lo": 0.4494,
+        "hi": 0.558,
+        "n": 238
+      },
+      "by_type": {
+        "knowledge-update": 0.8,
+        "multi-session": 0.507,
+        "single-session-assistant": 0.96,
+        "single-session-preference": 0.077,
+        "single-session-user": 0.679,
+        "temporal-reasoning": 0.603
+      }
+    }
+  },
+  "hybrid_minus_keyword_hit1": {
+    "mean": -0.0084,
+    "lo": -0.042,
+    "hi": 0.0294,
+    "n": 238
+  },
+  "hybrid_minus_meaning_hit1": {
+    "mean": 0.1429,
+    "lo": 0.0924,
+    "hi": 0.2059,
+    "n": 238
+  }
+}

@@ -17,7 +17,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { createEmbedder } from "../src/core/embed";
+import { ARCTIC_XS, createEmbedder, MINILM } from "../src/core/embed";
 import { quantize, SearchIndex, DEFAULT_LEXICAL_WEIGHT } from "../src/core/index";
 import { chunksOf } from "../src/core/library";
 import type { Conversation } from "../src/core/types";
@@ -45,7 +45,9 @@ const chunks = [...convs.values()].flatMap((c) => chunksOf(c));
 console.log(`${SPLIT}: ${qs.length} questions, ${convs.size} conversations, ${chunks.length} chunks`);
 
 // ---- embeddings, cached on disk (sha1(text) -> int8[384])
-const CACHE = resolve("eval/.out/emb-cache.bin");
+const SPEC = process.env.MODEL === "minilm" ? MINILM : ARCTIC_XS; // default: shipped model
+const MODEL_ROOT = SPEC === MINILM ? resolve("eval/.out/models") + "/" : resolve("static/models") + "/";
+const CACHE = resolve(SPEC === MINILM ? "eval/.out/emb-cache.bin" : `eval/.out/emb-cache-${SPEC.name}.bin`);
 mkdirSync(resolve("eval/.out"), { recursive: true });
 const cache = new Map<string, Int8Array>();
 if (existsSync(CACHE)) {
@@ -53,8 +55,10 @@ if (existsSync(CACHE)) {
   for (let o = 0; o + 404 <= buf.length; o += 404) cache.set(buf.subarray(o, o + 20).toString("hex"), new Int8Array(buf.buffer.slice(buf.byteOffset + o + 20, buf.byteOffset + o + 404)));
 }
 const key = (t: string) => createHash("sha1").update(t).digest("hex");
-const embed = await createEmbedder({ modelRoot: resolve("static/models") + "/", device: "cpu" });
-const todo = [...new Set([...chunks.map((c) => c.text), ...qs.map((q) => q.question)])].filter((t) => !cache.has(key(t)));
+const qkey = (t: string) => key(`\u0000query\u0000${t}`); // queries may carry a model-specific prefix
+const embed = await createEmbedder({ modelRoot: MODEL_ROOT, device: "cpu", spec: SPEC });
+for (const q of qs) if (!cache.has(qkey(q.question))) cache.set(qkey(q.question), quantize((await embed([q.question], true))[0]));
+const todo = [...new Set(chunks.map((c) => c.text))].filter((t) => !cache.has(key(t)));
 const t0 = Date.now();
 for (let i = 0; i < todo.length; i += 64) {
   const batch = todo.slice(i, i + 64);
@@ -94,8 +98,24 @@ function ci(xs: number[]) {
   return { mean: +mean.toFixed(4), lo: +ms[50].toFixed(4), hi: +ms[1949].toFixed(4), n };
 }
 
-type Sys = { name: string; w: number; dense: boolean };
-const systems: Sys[] = SPLIT === "dev"
+type Sys = { name: string; w: number; dense: boolean; extra?: Record<string, unknown> };
+const EXP = process.env.EXP;
+const systems: Sys[] = EXP === "grid"
+  ? [
+      { name: "kw", w: 1, dense: false },
+      { name: "kw k1=0.9 b=0.4", w: 1, dense: false, extra: { k1: 0.9, b: 0.4 } },
+      { name: "kw k1=1.5 b=0.75", w: 1, dense: false, extra: { k1: 1.5, b: 0.75 } },
+      { name: "kw k1=1.2 b=0.5", w: 1, dense: false, extra: { b: 0.5 } },
+      { name: "kw top3", w: 1, dense: false, extra: { aggregate: "top3" } },
+      { name: "kw max", w: 1, dense: false, extra: { aggregate: "max" } },
+      { name: "kw user1.3", w: 1, dense: false, extra: { roleWeight: { user: 1.3 } } },
+      { name: "kw user1.6", w: 1, dense: false, extra: { roleWeight: { user: 1.6 } } },
+      { name: "hy0.8 floor", w: 0.8, dense: true },
+      { name: "hy0.8 nofloor", w: 0.8, dense: true, extra: { minDense: -1 } },
+      { name: "hy0.8 user1.3", w: 0.8, dense: true, extra: { roleWeight: { user: 1.3 } } },
+      { name: "hy0.8 top3", w: 0.8, dense: true, extra: { aggregate: "top3" } },
+    ]
+  : SPLIT === "dev"
   ? [{ name: "keyword", w: 1, dense: false }, { name: "meaning", w: 0, dense: true },
      ...[0.3, 0.5, 0.6, 0.7, 0.8, 0.9].map((w) => ({ name: `hybrid@${w}`, w, dense: true }))]
   : [{ name: "keyword", w: 1, dense: false }, { name: "meaning", w: 0, dense: true }, { name: `hybrid@${DEFAULT_LEXICAL_WEIGHT}`, w: DEFAULT_LEXICAL_WEIGHT, dense: true }];
@@ -107,7 +127,7 @@ for (const s of systems) {
   for (const q of qs) {
     const gold = new Set(q.answer_session_ids);
     const t = performance.now();
-    const hits = index.search(q.question, s.dense ? cache.get(key(q.question))! : null, { limit: 50, lexicalWeight: s.w });
+    const hits = index.search(q.question, s.dense ? cache.get(qkey(q.question))! : null, { limit: 50, lexicalWeight: s.w, ...(s.extra ?? {}) });
     if (s.name.startsWith("hybrid@0.7")) lat.push(performance.now() - t);
     const rank = hits.findIndex((h) => gold.has(h.convId));
     rows[s.name].push({ type: q.question_type, hit1: +(rank === 0), hit5: +(rank >= 0 && rank < 5), hit10: +(rank >= 0 && rank < 10), rr: rank >= 0 ? 1 / (rank + 1) : 0 });
@@ -115,6 +135,7 @@ for (const s of systems) {
 }
 const summary: Record<string, unknown> = {
   dataset: `LongMemEval-S cleaned (MIT), ${SPLIT} split, conversation retrieval`,
+  model: SPEC.name,
   questions: qs.length, conversations: convs.size, chunks: chunks.length,
   latency_ms_hybrid: lat.length ? { p50: +lat.sort((a, b) => a - b)[Math.floor(lat.length / 2)].toFixed(1), p95: +lat[Math.floor(lat.length * 0.95)].toFixed(1) } : undefined,
   systems: {} as Record<string, unknown>,
@@ -125,12 +146,12 @@ for (const [name, rs] of Object.entries(rows)) {
     by_type: Object.fromEntries([...new Set(rs.map((r) => r.type))].sort().map((t) => [t, +ci(rs.filter((r) => r.type === t).map((r) => r.hit5)).mean.toFixed(3)])),
   };
 }
-const hy = rows[`hybrid@${DEFAULT_LEXICAL_WEIGHT}`];
+const hy = EXP ? undefined : rows[`hybrid@${DEFAULT_LEXICAL_WEIGHT}`];
 if (hy) {
   summary.hybrid_minus_keyword_hit1 = ci(hy.map((r, i) => r.hit1 - rows.keyword[i].hit1));
   summary.hybrid_minus_meaning_hit1 = ci(hy.map((r, i) => r.hit1 - rows.meaning[i].hit1));
 }
-writeFileSync(`eval/conversations-${SPLIT}.json`, JSON.stringify(summary, null, 2));
+writeFileSync(EXP ? `eval/.out/exp-${EXP}-${SPLIT}-${SPEC.name}.json` : `eval/conversations-${SPLIT}-${SPEC.name}.json`, JSON.stringify(summary, null, 2));
 for (const [name, v] of Object.entries(summary.systems as Record<string, { hit1: { mean: number }; hit5: { mean: number }; mrr: { mean: number } }>)) {
   console.log(`  ${name.padEnd(12)} hit@1 ${(v.hit1.mean * 100).toFixed(1)}  hit@5 ${(v.hit5.mean * 100).toFixed(1)}  MRR ${v.mrr.mean.toFixed(3)}`);
 }

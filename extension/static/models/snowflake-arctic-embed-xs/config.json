@@ -1,5 +1,5 @@
 {
-  "_name_or_path": "sentence-transformers/all-MiniLM-L6-v2",
+  "_name_or_path": "/data/.model_and_tokenizer_cache/c77fab5a013bf8ae09af620261ab907c8a7d5b18485a003d92a83483b3265145",
   "architectures": [
     "BertModel"
   ],
@@ -18,7 +18,8 @@
   "num_hidden_layers": 6,
   "pad_token_id": 0,
   "position_embedding_type": "absolute",
-  "transformers_version": "4.29.2",
+  "torch_dtype": "float32",
+  "transformers_version": "4.36.1",
   "type_vocab_size": 2,
   "use_cache": true,
   "vocab_size": 30522

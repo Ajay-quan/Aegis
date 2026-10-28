@@ -111,3 +111,15 @@ describe("backup", () => {
     await expect(decryptBackup(f, "wrong password!!")).rejects.toThrow(/Wrong password/);
   });
 });
+
+import { topK } from "../src/core/index";
+describe("topK", () => {
+  it("matches a full sort", () => {
+    let seed = 5;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const xs: [number, number][] = Array.from({ length: 5000 }, (_, i) => [i, rnd()]);
+    const want = [...xs].sort((a, b) => b[1] - a[1]).slice(0, 37);
+    expect(topK(xs, 37)).toEqual(want);
+    expect(topK(xs.slice(0, 10), 37)).toHaveLength(10);
+  });
+});

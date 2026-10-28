@@ -32,6 +32,10 @@ export interface SearchOptions {
   lexicalWeight?: number;
   minDense?: number; // cosine floor for meaning-only candidates (unrelated text scores ~0–0.2)
   relativeCutoff?: number; // drop conversations scoring below this fraction of the best one
+  roleWeight?: Partial<Record<Role | "title", number>>; // multiply fused chunk scores by role
+  aggregate?: "max" | "maxBonus" | "top3"; // chunk scores -> conversation score
+  k1?: number;
+  b?: number;
 }
 
 export interface Hit {
@@ -59,10 +63,39 @@ export function quantize(v: number[] | Float32Array): Int8Array {
   return q;
 }
 
-function dot8(a: Int8Array, b: Int8Array): number {
-  let s = 0;
-  for (let i = 0; i < a.length; i++) s += a[i] * b[i];
-  return s / 16129; // 127 * 127
+/** The k largest [id, score] pairs, without sorting everything (min-heap of size k). */
+export function topK(entries: Iterable<[number, number]>, k: number): [number, number][] {
+  const heap: [number, number][] = [];
+  const up = (i: number) => {
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heap[p][1] <= heap[i][1]) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]];
+      i = p;
+    }
+  };
+  const down = (i: number) => {
+    for (;;) {
+      const l = 2 * i + 1;
+      const r = l + 1;
+      let m = i;
+      if (l < heap.length && heap[l][1] < heap[m][1]) m = l;
+      if (r < heap.length && heap[r][1] < heap[m][1]) m = r;
+      if (m === i) break;
+      [heap[m], heap[i]] = [heap[i], heap[m]];
+      i = m;
+    }
+  };
+  for (const e of entries) {
+    if (heap.length < k) {
+      heap.push(e);
+      up(heap.length - 1);
+    } else if (e[1] > heap[0][1]) {
+      heap[0] = e;
+      down(0);
+    }
+  }
+  return heap.sort((a, b) => b[1] - a[1]);
 }
 
 function minmax(m: Map<number, number>): Map<number, number> {
@@ -112,12 +145,25 @@ export function snippet(text: string, query: string, width = 240): Snippet {
   return { text: s, ranges: merged };
 }
 
+function aggregate(v: { best: number; n: number; top: number[] }, how: "max" | "maxBonus" | "top3"): number {
+  if (how === "max") return v.best;
+  if (how === "top3") {
+    const t = v.top.sort((a, b) => b - a);
+    return t[0] + 0.5 * (t[1] ?? 0) + 0.25 * (t[2] ?? 0);
+  }
+  return v.best + 0.02 * Math.min(v.n - 1, 5);
+}
+
 export class SearchIndex {
   private chunks: (Chunk | undefined)[] = [];
   private byConv = new Map<string, number[]>();
   private postings = new Map<string, Map<number, number>>(); // term -> chunk -> tf
   private totalLen = 0;
   private live = 0;
+  // All vectors in one contiguous buffer (row i = chunk i); hasVec marks rows that are set.
+  private dim = 0;
+  private vecs = new Int8Array(0);
+  private hasVec = new Uint8Array(0);
 
   get size(): number {
     return this.live;
@@ -138,13 +184,36 @@ export class SearchIndex {
         if (!p) this.postings.set(t, (p = new Map()));
         p.set(id, f);
       }
-      this.chunks.push({ ...c, len: ts.length });
+      this.chunks.push({ ...c, vec: undefined, len: ts.length });
+      this.storeVec(id, c.vec);
       this.totalLen += ts.length;
       this.live++;
       const list = this.byConv.get(c.convId);
       if (list) list.push(id);
       else this.byConv.set(c.convId, [id]);
     }
+  }
+
+  private storeVec(id: number, v?: Int8Array): void {
+    const cap = this.hasVec.length;
+    if (id >= cap) {
+      const n = Math.max(1024, cap * 2, id + 1);
+      const hv = new Uint8Array(n);
+      hv.set(this.hasVec);
+      this.hasVec = hv;
+      if (this.dim) {
+        const vv = new Int8Array(n * this.dim);
+        vv.set(this.vecs);
+        this.vecs = vv;
+      }
+    }
+    if (!v) return;
+    if (!this.dim) {
+      this.dim = v.length;
+      this.vecs = new Int8Array(this.hasVec.length * this.dim);
+    }
+    this.vecs.set(v, id * this.dim);
+    this.hasVec[id] = 1;
   }
 
   remove(convId: string): void {
@@ -159,12 +228,16 @@ export class SearchIndex {
       this.totalLen -= c.len;
       this.live--;
       this.chunks[id] = undefined;
+      this.hasVec[id] = 0;
     }
     this.byConv.delete(convId);
   }
 
   clear(): void {
     this.chunks = [];
+    this.dim = 0;
+    this.vecs = new Int8Array(0);
+    this.hasVec = new Uint8Array(0);
     this.byConv.clear();
     this.postings.clear();
     this.totalLen = 0;
@@ -195,36 +268,51 @@ export class SearchIndex {
       for (const [id, f] of p) {
         const c = this.chunks[id]!;
         if (!this.passes(c, o)) continue;
-        lex.set(id, (lex.get(id) ?? 0) + (idf * f * (K1 + 1)) / (f + K1 * (1 - B + (B * c.len) / avg)));
+        const k1 = o.k1 ?? K1;
+        const b = o.b ?? B;
+        lex.set(id, (lex.get(id) ?? 0) + (idf * f * (k1 + 1)) / (f + k1 * (1 - b + (b * c.len) / avg)));
       }
     }
-    const lexTop = new Map([...lex].sort((a, b) => b[1] - a[1]).slice(0, POOL));
+    const lexTop = new Map(topK(lex, POOL));
     let denseTop = new Map<number, number>();
-    if (qvec) {
-      const scored: [number, number][] = [];
-      for (let id = 0; id < this.chunks.length; id++) {
-        const c = this.chunks[id];
-        if (!c?.vec || !this.passes(c, o)) continue;
-        const sim = dot8(qvec, c.vec);
-        // keep weak semantic matches only if the chunk also matched a keyword
-        if (sim >= (o.minDense ?? DEFAULT_MIN_DENSE) || lex.has(id)) scored.push([id, sim]);
+    if (qvec && this.dim === qvec.length) {
+      const filtered = !!(o.platforms?.length || o.role || o.from !== undefined || o.to !== undefined);
+      const floor = (o.minDense ?? DEFAULT_MIN_DENSE) * 16129;
+      const V = this.vecs;
+      const D = this.dim;
+      const n = this.chunks.length;
+      const self = this;
+      function* scores(): Generator<[number, number]> {
+        for (let id = 0; id < n; id++) {
+          if (!self.hasVec[id]) continue;
+          let dot = 0;
+          const off = id * D;
+          for (let i = 0; i < D; i++) dot += qvec![i] * V[off + i];
+          // keep weak semantic matches only if the chunk also matched a keyword
+          if (dot < floor && !lex.has(id)) continue;
+          if (filtered && !self.passes(self.chunks[id]!, o)) continue;
+          yield [id, dot / 16129];
+        }
       }
-      scored.sort((a, b) => b[1] - a[1]);
-      denseTop = new Map(scored.slice(0, POOL));
+      denseTop = new Map(topK(scores(), POOL));
     }
     const w = denseTop.size ? (lexTop.size ? o.lexicalWeight ?? DEFAULT_LEXICAL_WEIGHT : 0) : 1;
     const ln = minmax(lexTop);
     const dn = minmax(denseTop);
     const fused = new Map<number, number>();
-    for (const id of new Set([...ln.keys(), ...dn.keys()])) fused.set(id, w * (ln.get(id) ?? 0) + (1 - w) * (dn.get(id) ?? 0));
+    for (const id of new Set([...ln.keys(), ...dn.keys()])) {
+      const rw = o.roleWeight?.[this.chunks[id]!.role] ?? 1;
+      fused.set(id, rw * (w * (ln.get(id) ?? 0) + (1 - w) * (dn.get(id) ?? 0)));
+    }
 
     // Rank by the best chunk (title included); show the best *message* chunk as the snippet.
-    const convs = new Map<string, { best: number; bestId: number; n: number; msgBest: number; msgId: number }>();
+    const convs = new Map<string, { best: number; bestId: number; n: number; msgBest: number; msgId: number; top: number[] }>();
     for (const [id, s] of fused) {
       const c = this.chunks[id]!;
       let cur = convs.get(c.convId);
-      if (!cur) convs.set(c.convId, (cur = { best: -1, bestId: id, n: 0, msgBest: -1, msgId: -1 }));
+      if (!cur) convs.set(c.convId, (cur = { best: -1, bestId: id, n: 0, msgBest: -1, msgId: -1, top: [] }));
       cur.n++;
+      cur.top.push(s);
       if (s > cur.best) {
         cur.best = s;
         cur.bestId = id;
@@ -235,7 +323,7 @@ export class SearchIndex {
       }
     }
     const ranked = [...convs.entries()]
-      .map(([convId, v]) => ({ convId, score: v.best + 0.02 * Math.min(v.n - 1, 5), bestId: v.msgId >= 0 ? v.msgId : this.firstMessageChunk(convId) ?? v.bestId, n: v.n }))
+      .map(([convId, v]) => ({ convId, score: aggregate(v, o.aggregate ?? "maxBonus"), bestId: v.msgId >= 0 ? v.msgId : this.firstMessageChunk(convId) ?? v.bestId, n: v.n }))
       .sort((a, b) => b.score - a.score);
     const floor = (ranked[0]?.score ?? 0) * (o.relativeCutoff ?? DEFAULT_RELATIVE_CUTOFF);
     return ranked

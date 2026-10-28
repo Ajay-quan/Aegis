@@ -10,7 +10,8 @@ import { maskSecrets } from "./redact";
 import { PLATFORMS, type Conversation, type Platform } from "./types";
 import type { Embedder } from "./vector";
 
-export const EMBED_MODEL = "all-MiniLM-L6-v2";
+import { MODEL } from "./embed-spec";
+export const EMBED_MODEL = MODEL; // stored with vectors; a model change triggers re-indexing
 
 interface Stored {
   conv: Conversation;
@@ -295,7 +296,7 @@ export class Library {
     this.lastSearchMode = "keyword";
     if (this.embedder) {
       try {
-        qvec = quantize((await (this.queryEmbedder ?? this.embedder)([query]))[0]);
+        qvec = quantize((await (this.queryEmbedder ?? this.embedder)([query], true))[0]);
         this.lastSearchMode = "hybrid";
       } catch {
         qvec = null;

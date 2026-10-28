@@ -26,7 +26,7 @@ async function pump(): Promise<void> {
       const job = high[0] ?? low[0];
       if (!job) break;
       const slice = job.texts.slice(job.out.length, job.out.length + SLICE);
-      job.out.push(...(await e(slice)));
+      job.out.push(...(await e(slice, job.priority === "high")));
       if (job.out.length >= job.texts.length) {
         (job.priority === "high" ? high : low).shift();
         postMessage({ id: job.id, ok: true, vectors: job.out });
