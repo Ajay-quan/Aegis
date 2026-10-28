@@ -592,3 +592,21 @@ Ollama `nomic-embed-text` (768-d), a Docker Compose stack in staging config (:58
 - Verify the four site adapters against the live sites, logged in.
 - Create the Chrome Web Store developer account and submit (user action).
 - Optionally, an on-device LLM (Chrome built-in AI) for categorization and fact extraction, measured first.
+
+## Session 14 — 2026-10-28: Pivot to "AegisMem Recall" (search and port your AI chats)
+
+**Why:** an honest review rated the v0.2 "facts about me" extension 4/10. Built-in memory in ChatGPT, Claude and Gemini already covers that, for free.
+
+**Research findings:**
+- Demand for cross-AI chat search is visible, but there are competitors: LLMnesia, Echoes (about 10k users), ChatEngram, llm-history-search, AI Memory, ChatTrack.
+- Export formats for ChatGPT (`mapping` tree + `current_node`, split files), Claude (`chat_messages` with human/assistant senders) and Gemini Takeout (`MyActivity.json`, `details` vs `userInteractions` variants) are undocumented.
+- Store listings report malicious extensions stealing AI chats, so trust is a buying factor.
+
+**Decision:** build Recall with five *verifiable* differentiators.
+- **D1:** published search benchmark.
+- **D2:** import of the full history.
+- **D3:** continue in another AI.
+- **D4:** CSP-enforced zero network access, with history never rendered into third-party pages.
+- **D5:** speed.
+
+The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its code stays in git history. Branch: `feature/recall`.
