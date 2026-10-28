@@ -60,6 +60,8 @@ export class Library {
   private convs = new Map<string, Stored>();
   readonly index = new SearchIndex();
   embedder: Embedder | null = null;
+  /** Optional separate (higher-priority) embedder for search queries; defaults to `embedder`. */
+  queryEmbedder: Embedder | null = null;
   maskSecrets = true;
   lastSearchMode: "hybrid" | "keyword" = "keyword";
 
@@ -201,7 +203,11 @@ export class Library {
   }
 
   /** Insert or update conversations. Unchanged ones (same fingerprint) are skipped. */
-  async upsert(list: Conversation[], onProgress?: (p: Progress) => void): Promise<UpsertReport> {
+  /**
+   * Insert or update conversations. With { embed: false } they are saved and keyword-searchable at
+   * once; embedMissing() adds meaning vectors later (the extension does this in the background).
+   */
+  async upsert(list: Conversation[], onProgress?: (p: Progress) => void, opts: { embed?: boolean } = {}): Promise<UpsertReport> {
     const key = this.need();
     const report: UpsertReport = { added: 0, updated: 0, unchanged: 0 };
     const todo: Stored[] = [];
@@ -222,7 +228,7 @@ export class Library {
       else report.added++;
       todo.push({ conv });
     }
-    await this.embedAll(todo, onProgress);
+    if (opts.embed !== false) await this.embedAll(todo, onProgress);
     for (let i = 0; i < todo.length; i += 50) {
       const batch = todo.slice(i, i + 50);
       await db.putMany(await Promise.all(batch.map(async (s) => ({ id: s.conv.id, sealed: await sealJson(key, s) }))));
@@ -261,14 +267,20 @@ export class Library {
   }
 
   /** Embed conversations stored without vectors (e.g. saved while the model was unavailable). */
-  async embedMissing(onProgress?: (p: Progress) => void): Promise<number> {
-    const missing = [...this.convs.values()].filter((s) => s.model !== EMBED_MODEL).map((s): Stored => ({ conv: s.conv }));
+  async embedMissing(onProgress?: (p: Progress) => void, maxConversations = Infinity): Promise<number> {
+    const missing = [...this.convs.values()].filter((s) => s.model !== EMBED_MODEL).slice(0, maxConversations).map((s): Stored => ({ conv: s.conv }));
     if (!missing.length || !this.embedder) return 0;
     await this.embedAll(missing, onProgress);
-    const done = missing.filter((s) => s.model === EMBED_MODEL);
     const key = this.need();
+    const done = missing.filter((s) => {
+      const cur = this.convs.get(s.conv.id);
+      return s.model === EMBED_MODEL && cur && fingerprint(cur.conv) === fingerprint(s.conv);
+    });
     await db.putMany(await Promise.all(done.map(async (s) => ({ id: s.conv.id, sealed: await sealJson(key, s) }))));
     for (const s of done) {
+      // the conversation may have changed or been deleted while we were embedding
+      const cur = this.convs.get(s.conv.id);
+      if (!cur || fingerprint(cur.conv) !== fingerprint(s.conv)) continue;
       this.index.remove(s.conv.id);
       this.convs.set(s.conv.id, s);
       this.indexConv(s);
@@ -283,7 +295,7 @@ export class Library {
     this.lastSearchMode = "keyword";
     if (this.embedder) {
       try {
-        qvec = quantize((await this.embedder([query]))[0]);
+        qvec = quantize((await (this.queryEmbedder ?? this.embedder)([query]))[0]);
         this.lastSearchMode = "hybrid";
       } catch {
         qvec = null;
@@ -305,6 +317,12 @@ export class Library {
       .filter((c) => !platform || c.platform === platform)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, limit);
+  }
+
+  pendingEmbeddings(): number {
+    let n = 0;
+    for (const s of this.convs.values()) if (s.model !== EMBED_MODEL) n++;
+    return n;
   }
 
   stats() {

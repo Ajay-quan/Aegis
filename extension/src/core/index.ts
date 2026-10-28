@@ -30,6 +30,8 @@ export interface SearchOptions {
   to?: number;
   limit?: number; // conversations
   lexicalWeight?: number;
+  minDense?: number; // cosine floor for meaning-only candidates (unrelated text scores ~0–0.2)
+  relativeCutoff?: number; // drop conversations scoring below this fraction of the best one
 }
 
 export interface Hit {
@@ -45,6 +47,8 @@ export interface Snippet {
 }
 
 export const DEFAULT_LEXICAL_WEIGHT = 0.7;
+export const DEFAULT_MIN_DENSE = 0.25;
+export const DEFAULT_RELATIVE_CUTOFF = 0.3;
 const K1 = 1.2;
 const B = 0.75;
 const POOL = 200;
@@ -201,7 +205,9 @@ export class SearchIndex {
       for (let id = 0; id < this.chunks.length; id++) {
         const c = this.chunks[id];
         if (!c?.vec || !this.passes(c, o)) continue;
-        scored.push([id, dot8(qvec, c.vec)]);
+        const sim = dot8(qvec, c.vec);
+        // keep weak semantic matches only if the chunk also matched a keyword
+        if (sim >= (o.minDense ?? DEFAULT_MIN_DENSE) || lex.has(id)) scored.push([id, sim]);
       }
       scored.sort((a, b) => b[1] - a[1]);
       denseTop = new Map(scored.slice(0, POOL));
@@ -228,9 +234,12 @@ export class SearchIndex {
         cur.msgId = id;
       }
     }
-    return [...convs.entries()]
+    const ranked = [...convs.entries()]
       .map(([convId, v]) => ({ convId, score: v.best + 0.02 * Math.min(v.n - 1, 5), bestId: v.msgId >= 0 ? v.msgId : this.firstMessageChunk(convId) ?? v.bestId, n: v.n }))
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => b.score - a.score);
+    const floor = (ranked[0]?.score ?? 0) * (o.relativeCutoff ?? DEFAULT_RELATIVE_CUTOFF);
+    return ranked
+      .filter((h) => h.score >= floor)
       .slice(0, o.limit ?? 20)
       .map((h) => {
         const c = this.chunks[h.bestId]!;

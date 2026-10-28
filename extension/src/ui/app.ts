@@ -32,11 +32,12 @@ async function refreshState(): Promise<LibState> {
   status.replaceChildren(
     !state.exists ? h("span", { class: "pill warn" }, "Not set up")
     : !state.unlocked ? h("span", { class: "pill warn" }, "Locked")
+    : state.model === "ready" && state.indexing ? h("span", { class: "pill warn", title: "Keyword search works now; meaning search is being added on-device" }, `Indexing… ${Math.round((100 * ((state.stats?.conversations ?? 0) - state.indexing)) / Math.max(1, state.stats?.conversations ?? 1))}%`)
     : state.model === "ready" ? h("span", { class: "pill", title: "On-device meaning + keyword search" }, "Smart search")
     : state.model === "loading" ? h("span", { class: "pill warn" }, "Loading search model…")
     : h("span", { class: "pill warn", title: state.modelError ?? "" }, "Keyword search only"),
   );
-  if (state.model === "loading") setTimeout(() => void refreshState(), 1500);
+  if (state.model === "loading" || state.indexing) setTimeout(() => void refreshState(), 1500);
   return state;
 }
 
@@ -276,7 +277,7 @@ function importView(): void {
     if (!parsed.conversations.length) return line("No conversations found in these files.", "err");
     const total = parsed.conversations.length;
     const bar = h("progress", { max: total, value: 0 }) as HTMLProgressElement;
-    const label = h("div", { class: "small muted" }, `Indexing 0 / ${total} conversations (on-device; large histories take a few minutes)…`);
+    const label = h("div", { class: "small muted" }, `Saving 0 / ${total} conversations…`);
     log.append(bar, label);
     const sum = { added: 0, updated: 0, unchanged: 0 };
     const t0 = performance.now();
@@ -285,12 +286,13 @@ function importView(): void {
       sum.added += r.added; sum.updated += r.updated; sum.unchanged += r.unchanged;
       bar.value = Math.min(i + 25, total);
       const rate = (performance.now() - t0) / bar.value;
-      label.textContent = `Indexing ${bar.value} / ${total} conversations · about ${Math.ceil((rate * (total - bar.value)) / 60000)} min left`;
+      label.textContent = `Saving ${bar.value} / ${total} conversations · about ${Math.max(1, Math.ceil((rate * (total - bar.value)) / 1000))} s left`;
     }
     label.textContent = "";
     bar.remove();
     await refreshState();
     line(h("strong", { class: "okc" }, `Done: ${sum.added} new, ${sum.updated} updated, ${sum.unchanged} already up to date${parsed.skipped ? `, ${parsed.skipped} empty skipped` : ""}.`));
+    line("You can search right away. Meaning-based search is added on-device in the background; the badge at the top shows progress.", "small muted");
     log.append(h("a", { href: "#" }, h("button", { class: "primary" }, "Start searching")));
   }
 }

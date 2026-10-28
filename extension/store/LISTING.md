@@ -1,38 +1,45 @@
 # Chrome Web Store listing
 
-**Name:** AegisMem: private memory for your AIs
+**Name:** AegisMem: search all your AI chats
 
-**Summary (132 chars max):** Encrypted, on-device memory that follows you across ChatGPT, Claude and Gemini. You see, edit and delete everything.
+**Summary (≤132 chars):** Find any answer from ChatGPT, Claude, Gemini and Perplexity in one search, and continue any chat in another AI. Private.
 
 **Category:** Productivity
 
 **Description:**
 
-Tired of re-explaining yourself to every AI? AegisMem remembers what you tell ChatGPT, Claude, Gemini
-and Perplexity, and brings it back when it's relevant. It stays private: everything is encrypted on
-your device, and nobody else, including us, can read it.
+You've had hundreds of conversations with AI. The answer you need is in one of them, but which app,
+which chat, which week?
 
-HOW IT WORKS
-• Turn on capture for the AI sites you use.
-• Facts you mention about yourself are saved, encrypted ("I'm vegetarian", "I moved to Denver").
-• Click ＋ Memories while typing to add what's relevant to your message. You always see it first.
+AegisMem gives you one search box across all of them.
 
-PRIVATE BY DESIGN
-• End-to-end on your device: no servers, no accounts, no tracking.
-• AES-256 encryption with your passphrase, plus a recovery key only you hold.
-• Card numbers, passwords, API keys and contact details are removed before saving.
+FIND ANYTHING YOU'VE EVER ASKED AN AI
+• Search ChatGPT, Claude, Gemini and Perplexity together.
+• Search by meaning, not just exact words. "is my bread culture ruined" finds the chat about your
+  sourdough starter.
+• Filter by app, date, or whether it was in your message or the AI's reply.
+• Jump straight to the matching message.
+• Quick search from anywhere: Ctrl/Cmd+Shift+K.
 
-SAFE MEMORY
-• Text that looks like hidden instructions aimed at an AI is held for your review and never used automatically.
-• When something changes, the newer fact is shown alongside the older one, with dates.
+YOUR WHOLE HISTORY ON DAY ONE
+• Import the official exports from ChatGPT, Claude and Google Takeout (Gemini).
+• New chats are saved automatically after each reply.
 
-YOU'RE IN CONTROL
-• View, search, edit, re-categorize or delete any memory. Export or delete everything.
-• Auto-lock after inactivity.
+CONTINUE ANY CHAT IN ANOTHER AI
+• Hit a usage limit, or want a second opinion? One click carries the conversation's context to
+  ChatGPT, Claude, Gemini or Perplexity. You review it before sending.
+• "Ask an AI using these results": turn your search results into a question for any AI.
 
-Gemini and Perplexity support is in beta.
+PRIVATE BY DESIGN, NOT BY PROMISE
+• No account, no servers, no tracking. The extension's pages are blocked from the internet.
+• Everything is encrypted on your device (AES-256). An optional passphrase is available.
+• Your history is never shown inside AI websites, so they can't read it.
+• Secrets (API keys, card numbers) are masked before saving.
+• Encrypted backups and Markdown export: your data, portable.
 
-**Single purpose (for review):** Keep a private, encrypted memory of facts the user shares with AI
-chat assistants, and let the user insert relevant memories into their own messages.
+Gemini and Perplexity live saving is in beta. Imports work for all supported services.
 
-**Data usage disclosures:** No data is collected or transmitted. Content is stored locally and encrypted.
+**Single purpose:** Let users search and reuse their own conversations with AI chat assistants.
+
+**Data usage disclosures:** Website content (AI conversations) is processed locally to provide search.
+No data is collected, sold or transferred. All data stays on the device.

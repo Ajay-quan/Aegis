@@ -46,6 +46,7 @@ export interface LibState {
   search: "hybrid" | "keyword";
   model: "loading" | "ready" | "unavailable";
   modelError?: string;
+  indexing?: number; // conversations still waiting for meaning vectors
   stats?: { conversations: number; messages: number; chunks: number; embedded: number; byPlatform: Record<string, number> };
 }
 

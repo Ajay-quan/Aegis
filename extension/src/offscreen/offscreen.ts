@@ -5,7 +5,6 @@
  * Only accepts requests forwarded by this extension's service worker.
  */
 import { b64, unb64 } from "../core/crypto";
-import { createEmbedder } from "../core/embed";
 import { Library } from "../core/library";
 import { db } from "../core/db";
 import type { LibRequest, LibState, Response } from "../protocol";
@@ -14,12 +13,32 @@ const lib = new Library();
 let model: LibState["model"] = "loading";
 let modelError = "";
 
-const embedderReady = createEmbedder({ modelRoot: chrome.runtime.getURL("models/"), wasmRoot: chrome.runtime.getURL("ort/") })
-  .then(async (e) => {
-    await e(["warm up"]);
-    lib.embedder = e;
+// The model runs in a dedicated worker (see embed-worker.ts). Cross-origin isolation (manifest)
+// enables SharedArrayBuffer, hence multi-threaded WASM: about 4x faster indexing measured in Chrome.
+const threads = self.crossOriginIsolated ? Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) : 1;
+const worker = new Worker(chrome.runtime.getURL("embed-worker.js"), { type: "module" });
+let seq = 0;
+const pending = new Map<number, { resolve: (v: number[][]) => void; reject: (e: Error) => void }>();
+worker.onmessage = (ev) => {
+  const p = pending.get(ev.data.id);
+  if (!p) return;
+  pending.delete(ev.data.id);
+  if (ev.data.ok) p.resolve(ev.data.vectors);
+  else p.reject(new Error(ev.data.error));
+};
+function ask(msg: Record<string, unknown>): Promise<number[][]> {
+  const id = ++seq;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    worker.postMessage({ ...msg, id });
+  });
+}
+const embedderReady = ask({ type: "init", threads, modelRoot: chrome.runtime.getURL("models/"), wasmRoot: chrome.runtime.getURL("ort/") })
+  .then(() => {
+    lib.embedder = (texts) => ask({ type: "embed", texts, priority: "low" });
+    lib.queryEmbedder = (texts) => ask({ type: "embed", texts, priority: "high" });
     model = "ready";
-    if (lib.unlocked) void lib.embedMissing();
+    void backgroundEmbed();
   })
   .catch((e: Error) => {
     model = "unavailable";
@@ -29,8 +48,29 @@ const embedderReady = createEmbedder({ modelRoot: chrome.runtime.getURL("models/
 
 const initDone = lib.init().catch((e) => console.error("AegisMem: init failed", e));
 
+// Background indexing: conversations are keyword-searchable as soon as they're saved; meaning vectors
+// are added here, a few conversations at a time, so searches and captures are never blocked for long.
+let embedding = false;
+async function backgroundEmbed(): Promise<void> {
+  if (embedding) return;
+  embedding = true;
+  try {
+    await embedderReady;
+    while (lib.unlocked && lib.embedder && lib.pendingEmbeddings() > 0) {
+      const n = await lib.embedMissing(undefined, 8);
+      if (!n) break; // model failing: stop, retry on the next trigger
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  } catch (e) {
+    console.error("AegisMem: background indexing stopped", e);
+  } finally {
+    embedding = false;
+  }
+}
+
 async function state(): Promise<LibState> {
   await initDone;
+  if (lib.unlocked && lib.pendingEmbeddings() > 0) void backgroundEmbed(); // e.g. device-mode library opened at start
   return {
     exists: lib.mode !== null,
     mode: lib.mode,
@@ -39,6 +79,7 @@ async function state(): Promise<LibState> {
     model,
     modelError: modelError || undefined,
     stats: lib.unlocked ? lib.stats() : undefined,
+    indexing: lib.unlocked && lib.embedder ? lib.pendingEmbeddings() : 0,
   };
 }
 
@@ -49,6 +90,7 @@ async function handle(req: LibRequest): Promise<Response> {
       return { ok: true, state: await state() };
     case "setupDevice":
       await lib.setupDevice();
+      void backgroundEmbed();
       return { ok: true, state: await state() };
     case "setupPassphrase": {
       const recoveryKey = await lib.setupPassphrase(req.passphrase);
@@ -56,13 +98,14 @@ async function handle(req: LibRequest): Promise<Response> {
     }
     case "unlock":
       await lib.unlock(req.passphrase);
-      void embedderReady.then(() => lib.embedMissing());
+      void backgroundEmbed();
       return { ok: true, sessionKey: b64(lib.sessionKey()!) };
     case "recover":
       await lib.recover(req.recoveryKey, req.newPassphrase);
       return { ok: true, sessionKey: b64(lib.sessionKey()!) };
     case "resume":
       if (!lib.unlocked) await lib.resume(unb64(req.raw));
+      void backgroundEmbed();
       return { ok: true };
     case "lock":
       lib.lock();
@@ -81,9 +124,11 @@ async function handle(req: LibRequest): Promise<Response> {
       return { ok: true, conversation: lib.get(req.id) };
     case "recent":
       return { ok: true, conversations: lib.recent(req.limit, req.platform) };
-    case "upsert":
-      await embedderReady.catch(() => {});
-      return { ok: true, report: await lib.upsert(req.conversations) };
+    case "upsert": {
+      const report = await lib.upsert(req.conversations, undefined, { embed: false });
+      void backgroundEmbed();
+      return { ok: true, report };
+    }
     case "embedMissing":
       return { ok: true, count: await lib.embedMissing() };
     case "delete":

@@ -1,4 +1,4 @@
-node_modules/
+*.zip
 dist/
 eval/.out/
-*.zip
+node_modules/

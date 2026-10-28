@@ -74,6 +74,13 @@ try {
   await app.setInputFiles('input[type="file"]', [join(tmp, "chatgpt-export.zip"), join(tmp, "claude-export.zip")]);
   await app.waitForSelector("text=/Done: 42 new/", { timeout: 120000 });
   step("imported ChatGPT + Claude export zips (42 conversations)");
+  await app.goto(`chrome-extension://${id}/app.html#`);
+  await app.fill("#q", "landlord");
+  await app.waitForSelector(".result h3:has-text('Lease and rent')");
+  step("keyword search works immediately after import");
+  for (let i = 0; i < 120 && (await st()).state.indexing > 0; i++) await app.waitForTimeout(500);
+  assert.equal((await st()).state.indexing, 0, "background meaning indexing should finish");
+  step("background meaning indexing completed");
 
   // Keyword search
   await app.goto(`chrome-extension://${id}/app.html#`);
@@ -191,7 +198,7 @@ try {
   await app.waitForSelector("text=Wrong passphrase");
   await app.fill('input[placeholder="Passphrase"]', "correct horse battery");
   await app.click("button:has-text('Unlock')");
-  await app.waitForSelector("text=/conversations ·/");
+  await app.waitForSelector(".filters"); // unlocked: search view is back (with the previous query kept)
   await app.fill("#q", "sourdough");
   await app.waitForSelector(".result h3:has-text('Sourdough troubleshooting')");
   step("passphrase added → lock → wrong passphrase rejected → unlock → search works");
