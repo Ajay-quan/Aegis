@@ -208,6 +208,12 @@ export class Library {
     for (const raw of list) {
       const conv: Conversation = this.maskSecrets ? { ...raw, title: maskSecrets(raw.title), messages: raw.messages.map((m) => ({ ...m, text: maskSecrets(m.text) })) } : raw;
       const prev = this.convs.get(conv.id);
+      // A live capture may see only part of a long thread (the page hasn't loaded it all): never let it
+      // replace a fuller copy, e.g. one that came from an export.
+      if (prev && conv.source === "capture" && prev.conv.messages.length > conv.messages.length) {
+        report.unchanged++;
+        continue;
+      }
       if (prev && fingerprint(prev.conv) === fingerprint(conv) && (prev.model === EMBED_MODEL || !this.embedder)) {
         report.unchanged++;
         continue;

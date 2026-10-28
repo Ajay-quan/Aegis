@@ -1,100 +1,86 @@
 /**
- * Runs on supported AI sites.
- *   capture  user messages are sent to the vault (only if the user enabled capture for this site)
- *   insert   the "AegisMem" button adds relevant memories to the prompt, visibly, on the user's click
- * Assistant replies and other page text are not captured.
+ * Runs on supported AI sites. Two jobs only:
+ *   capture   after a reply finishes, send the visible conversation (both sides) to the library
+ *   handoff   if this tab was opened by AegisMem to continue a chat, put the prepared text in the
+ *             editor (never sends it; the user reviews and presses Enter)
+ * Nothing from the library is ever shown on, or readable by, this page.
  */
 import { adapterFor } from "./adapters";
-import { send } from "../messages";
+import type { Message } from "../core/types";
+import type { Request, Response } from "../protocol";
 
-const adapter = adapterFor(location.hostname);
-const seen = new Set<string>();
-
-const CONTEXT_HEADER = "Context from my personal memory (AegisMem).";
-function capture(text: string): void {
-  let t = text.trim();
-  if (t.startsWith(CONTEXT_HEADER)) {
-    const end = t.indexOf("\n\n");
-    t = end < 0 ? "" : t.slice(end + 2).trim(); // never re-capture inserted memories
-  }
-  if (!adapter || !t || seen.has(t)) return;
-  seen.add(t);
-  send({ type: "capture", text: t, site: adapter.site, url: location.href }).catch(() => {});
-}
-
-function draftText(input: HTMLElement): string {
-  return (input instanceof HTMLTextAreaElement ? input.value : input.innerText).trim();
-}
-
-// Path 2: capture what the user is sending when they press Enter, independent of how the site renders it.
-document.addEventListener(
-  "keydown",
-  (e) => {
-    if (!adapter || e.key !== "Enter" || e.shiftKey || e.isComposing) return;
-    const input = (e.target as HTMLElement | null)?.closest?.(adapter.input) as HTMLElement | null;
-    if (input) capture(draftText(input));
-  },
-  true,
-);
-
-function captureNew(): void {
-  if (!adapter) return;
-  for (const el of document.querySelectorAll<HTMLElement>(adapter.userMessage)) capture(el.innerText);
-}
-
+const send = (r: Request): Promise<Response> => chrome.runtime.sendMessage(r);
+const a = adapterFor(location.hostname);
+let lastSent = "";
 let timer: number | undefined;
-function schedule(): void {
+
+function collect(): Message[] {
+  if (!a) return [];
+  const out: Message[] = [];
+  for (const el of document.querySelectorAll<HTMLElement>(`${a.user}, ${a.assistant}`)) {
+    // skip elements nested inside another matched element (e.g. markdown inside a message wrapper)
+    const parent = el.parentElement?.closest(`${a.user}, ${a.assistant}`);
+    if (parent) continue;
+    const text = el.innerText.trim();
+    if (!text) continue;
+    out.push({ role: el.matches(a.user) ? "user" : "assistant", text });
+  }
+  return out;
+}
+
+function capture(): void {
+  if (!a) return;
+  const id = location.pathname.match(a.idFromPath)?.[1];
+  if (!id) return;
+  if (document.querySelector(a.streaming)) return schedule(1500); // wait for the reply to finish
+  const messages = collect();
+  if (!messages.length) return;
+  const key = `${id}|${messages.length}|${messages[messages.length - 1].text.length}`;
+  if (key === lastSent) return;
+  lastSent = key;
+  const now = new Date().toISOString();
+  void send({
+    type: "captureConv",
+    conversation: {
+      id: `${a.platform}:${id}`, platform: a.platform, nativeId: id, title: a.title() || messages[0].text.slice(0, 70),
+      createdAt: now, updatedAt: now, messages, source: "capture",
+    },
+  }).catch(() => {});
+}
+
+function schedule(ms = 1200): void {
   clearTimeout(timer);
-  timer = window.setTimeout(captureNew, 800);
+  timer = window.setTimeout(capture, ms);
 }
 
-function toast(msg: string): void {
-  const t = document.createElement("div");
-  t.textContent = msg;
-  t.style.cssText =
-    "position:fixed;right:20px;bottom:76px;z-index:2147483647;background:#1f2937;color:#fff;padding:8px 12px;" +
-    "border-radius:8px;font:13px system-ui,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.25)";
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
-}
-
-async function insertMemories(): Promise<void> {
-  if (!adapter) return;
-  const input = document.querySelector<HTMLElement>(adapter.input);
-  if (!input) return toast("AegisMem: couldn't find the message box on this page.");
-  const draft = draftText(input);
-  if (!draft) return toast("AegisMem: type your message first, then click to add relevant memories.");
-  const res = await send({ type: "context", query: draft });
-  if (!res.ok) return toast(res.error === "locked" ? "AegisMem is locked. Open the side panel to unlock." : `AegisMem: ${res.error}`);
-  if (!res.context) return toast("AegisMem: no relevant memories for this message.");
+async function receiveHandoff(): Promise<void> {
+  if (!a) return;
+  // Claim the handoff only once the editor exists, so a login wall or interstitial page doesn't use it up.
+  let input: HTMLElement | null = null;
+  for (let i = 0; i < 120 && !(input = document.querySelector<HTMLElement>(a.input)); i++) await new Promise((res) => setTimeout(res, 250));
+  if (!input) return;
+  // Only a tab AegisMem just opened gets text; retry briefly while the tab id is being recorded.
+  let r: Response | null = null;
+  for (let i = 0; i < 8; i++) {
+    r = await send({ type: "takeHandoff" }).catch(() => null);
+    if (r?.ok && r.text) break;
+    await new Promise((res) => setTimeout(res, 400));
+  }
+  if (!r?.ok || !r.text) return;
+  input = document.querySelector<HTMLElement>(a.input) ?? input;
   input.focus();
-  const full = `${res.context}\n\n${draft}`;
   if (input instanceof HTMLTextAreaElement) {
-    input.value = full;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setter?.call(input, r.text);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   } else {
     document.execCommand("selectAll");
-    document.execCommand("insertText", false, full);
+    document.execCommand("insertText", false, r.text);
   }
-  toast("AegisMem: memories added. Review them before sending.");
 }
 
-function button(): void {
-  if (document.getElementById("aegismem-btn")) return;
-  const b = document.createElement("button");
-  b.id = "aegismem-btn";
-  b.type = "button";
-  b.textContent = "＋ Memories";
-  b.title = "AegisMem: add relevant memories to this message";
-  b.style.cssText =
-    "position:fixed;right:20px;bottom:24px;z-index:2147483647;border:0;border-radius:999px;padding:8px 14px;" +
-    "background:#4f46e5;color:#fff;font:600 13px system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)";
-  b.addEventListener("click", () => void insertMemories());
-  document.body.appendChild(b);
-}
-
-if (adapter) {
-  button();
-  captureNew();
-  new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+if (a) {
+  new MutationObserver(() => schedule()).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+  schedule(2000);
+  void receiveHandoff();
 }

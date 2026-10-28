@@ -100,3 +100,14 @@ describe("chunking and snippets", () => {
     expect(s.text.slice(s.ranges[0][0], s.ranges[0][1]).toLowerCase()).toBe("landlord");
   });
 });
+
+import { decryptBackup, encryptBackup } from "../src/core/backup";
+describe("backup", () => {
+  it("round-trips with the right password and rejects a wrong one", async () => {
+    const cs = [conv("9", "Backup me", [["user", "remember the blue notebook"]])];
+    const f = await encryptBackup(cs, "backup password 1", 1000);
+    expect(JSON.stringify(f)).not.toContain("blue notebook");
+    expect((await decryptBackup(f, "backup password 1"))[0].title).toBe("Backup me");
+    await expect(decryptBackup(f, "wrong password!!")).rejects.toThrow(/Wrong password/);
+  });
+});

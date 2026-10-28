@@ -167,6 +167,10 @@ export class SearchIndex {
     this.live = 0;
   }
 
+  private firstMessageChunk(convId: string): number | undefined {
+    return this.byConv.get(convId)?.find((id) => this.chunks[id]?.role !== "title");
+  }
+
   private passes(c: Chunk, o: SearchOptions): boolean {
     if (o.platforms?.length && !o.platforms.includes(c.platform)) return false;
     if (o.role && c.role !== o.role) return false;
@@ -208,21 +212,24 @@ export class SearchIndex {
     const fused = new Map<number, number>();
     for (const id of new Set([...ln.keys(), ...dn.keys()])) fused.set(id, w * (ln.get(id) ?? 0) + (1 - w) * (dn.get(id) ?? 0));
 
-    const convs = new Map<string, { best: number; bestId: number; n: number }>();
+    // Rank by the best chunk (title included); show the best *message* chunk as the snippet.
+    const convs = new Map<string, { best: number; bestId: number; n: number; msgBest: number; msgId: number }>();
     for (const [id, s] of fused) {
       const c = this.chunks[id]!;
-      const cur = convs.get(c.convId);
-      if (!cur) convs.set(c.convId, { best: s, bestId: id, n: 1 });
-      else {
-        cur.n++;
-        if (s > cur.best) {
-          cur.best = s;
-          cur.bestId = id;
-        }
+      let cur = convs.get(c.convId);
+      if (!cur) convs.set(c.convId, (cur = { best: -1, bestId: id, n: 0, msgBest: -1, msgId: -1 }));
+      cur.n++;
+      if (s > cur.best) {
+        cur.best = s;
+        cur.bestId = id;
+      }
+      if (c.role !== "title" && s > cur.msgBest) {
+        cur.msgBest = s;
+        cur.msgId = id;
       }
     }
     return [...convs.entries()]
-      .map(([convId, v]) => ({ convId, score: v.best + 0.02 * Math.min(v.n - 1, 5), bestId: v.bestId, n: v.n }))
+      .map(([convId, v]) => ({ convId, score: v.best + 0.02 * Math.min(v.n - 1, 5), bestId: v.msgId >= 0 ? v.msgId : this.firstMessageChunk(convId) ?? v.bestId, n: v.n }))
       .sort((a, b) => b.score - a.score)
       .slice(0, o.limit ?? 20)
       .map((h) => {

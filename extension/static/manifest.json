@@ -1,18 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "AegisMem: private memory for your AIs",
+  "name": "AegisMem: search all your AI chats",
   "short_name": "AegisMem",
-  "version": "0.2.0",
-  "description": "Encrypted, on-device memory that follows you across ChatGPT and Claude. You see, edit and delete everything.",
+  "version": "1.0.0",
+  "description": "Search every ChatGPT, Claude, Gemini and Perplexity chat in one place, and continue any chat in another AI. Private: encrypted, on your device.",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "sidePanel", "unlimitedStorage", "offscreen", "alarms"],
-  "host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*", "https://www.perplexity.ai/*"],
+  "permissions": ["storage", "unlimitedStorage", "offscreen", "alarms"],
+  "host_permissions": ["https://chatgpt.com/*", "https://chat.openai.com/*", "https://claude.ai/*", "https://gemini.google.com/*", "https://www.perplexity.ai/*"],
   "background": { "service_worker": "background.js", "type": "module" },
-  "side_panel": { "default_path": "panel.html" },
+  "action": { "default_title": "Search your AI chats (Ctrl/Cmd+Shift+K)", "default_popup": "popup.html", "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" } },
+  "commands": {
+    "_execute_action": { "suggested_key": { "default": "Ctrl+Shift+K", "mac": "Command+Shift+K" }, "description": "Quick search" },
+    "open-app": { "suggested_key": { "default": "Ctrl+Shift+Y", "mac": "Command+Shift+Y" }, "description": "Open AegisMem" }
+  },
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
-  "action": { "default_title": "Open AegisMem", "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" } },
   "content_scripts": [
-    { "matches": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*", "https://www.perplexity.ai/*"], "js": ["content.js"], "run_at": "document_idle" }
+    { "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*", "https://claude.ai/*", "https://gemini.google.com/*", "https://www.perplexity.ai/*"], "js": ["content.js"], "run_at": "document_idle" }
   ],
-  "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" }
+  "content_security_policy": { "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" }
 }

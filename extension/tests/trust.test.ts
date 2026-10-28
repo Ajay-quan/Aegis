@@ -6,17 +6,18 @@ const ORIGIN = `chrome-extension://${ID}/`;
 
 describe("message trust", () => {
   it("trusts only this extension's own pages", () => {
-    expect(isTrusted({ id: ID, url: `${ORIGIN}panel.html` }, ID, ORIGIN)).toBe(true);
-    expect(isTrusted({ id: ID, url: "https://chatgpt.com/c/1" }, ID, ORIGIN)).toBe(false); // content script
-    expect(isTrusted({ id: "other", url: `${ORIGIN}panel.html` }, ID, ORIGIN)).toBe(false);
+    expect(isTrusted({ id: ID, url: `${ORIGIN}app.html` }, ID, ORIGIN)).toBe(true);
+    expect(isTrusted({ id: ID, url: "https://chatgpt.com/c/1" }, ID, ORIGIN)).toBe(false);
+    expect(isTrusted({ id: "other", url: `${ORIGIN}app.html` }, ID, ORIGIN)).toBe(false);
     expect(isTrusted({ id: ID }, ID, ORIGIN)).toBe(false);
   });
 
-  it("content scripts can only capture, ask for context and read status", () => {
-    for (const t of ["list", "export", "forget", "forgetAll", "edit", "approve", "settings", "unlock", "setup", "changePassphrase", "lock"]) {
+  it("AI-site pages can only submit captures and collect their own handoff; never read history", () => {
+    for (const t of ["search", "get", "recent", "exportAll", "delete", "deleteAll", "state", "unlock", "settings", "handoff", "upsert", "switchMode", "wipeEverything"]) {
       expect(allowed(t, false)).toBe(false);
     }
-    for (const t of ["capture", "context", "status"]) expect(allowed(t, false)).toBe(true);
-    expect(allowed("export", true)).toBe(true);
+    expect(allowed("captureConv", false)).toBe(true);
+    expect(allowed("takeHandoff", false)).toBe(true);
+    expect(allowed("search", true)).toBe(true);
   });
 });

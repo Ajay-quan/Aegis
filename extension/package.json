@@ -1,13 +1,13 @@
 {
   "name": "aegismem-extension",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "e2e": "node build.mjs && node e2e/extension.e2e.mjs",
+    "e2e": "node build.mjs && node e2e/recall.e2e.mjs",
     "package": "node package.mjs",
     "eval": "node eval/run.mjs"
   },
