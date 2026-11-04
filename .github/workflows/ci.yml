@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mem/server
+        working-directory: AegisMem/server
     strategy:
       fail-fast: false
       matrix:
@@ -50,12 +50,12 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: mem/server/pyproject.toml
+          cache-dependency-path: AegisMem/server/pyproject.toml
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: mem/server/sdk/typescript/package-lock.json
+          cache-dependency-path: AegisMem/server/sdk/typescript/package-lock.json
       - name: Install
         run: |
           pip install -e ".[dev]"
@@ -80,4 +80,4 @@ jobs:
         if: always()
         with:
           name: bench-results-py${{ matrix.python }}
-          path: mem/server/bench-results/
+          path: AegisMem/server/bench-results/
