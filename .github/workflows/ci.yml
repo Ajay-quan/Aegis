@@ -13,6 +13,9 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mem/server
     strategy:
       fail-fast: false
       matrix:
@@ -47,11 +50,12 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
+          cache-dependency-path: mem/server/pyproject.toml
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: sdk/typescript/package-lock.json
+          cache-dependency-path: mem/server/sdk/typescript/package-lock.json
       - name: Install
         run: |
           pip install -e ".[dev]"
@@ -76,4 +80,4 @@ jobs:
         if: always()
         with:
           name: bench-results-py${{ matrix.python }}
-          path: bench-results/
+          path: mem/server/bench-results/

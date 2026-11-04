@@ -666,3 +666,14 @@ The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its
 - `extension/README.md`: measured results and limitations.
 - `store/LISTING.md`, `store/PRIVACY.md`, 4 store screenshots.
 - `store/landing/index.html`: a local landing page, **not published**.
+
+## Session 15 — 2026-11-04: Restructure into the Aegis monorepo
+
+**Decision:** One umbrella repo, "Aegis", holding AegisMem, AegisTrace and later shared code. Branch `restructure/aegis-monorepo`, not pushed.
+
+- `mem/server/`: the Python backend moved as one block (core, domain, adapters, services, apps, infra, tests, bench, sdk, integrations, audit, pyproject). Its imports and Docker paths are unchanged because they're relative to this folder.
+- `mem/extension/`: the Chrome extension. `mem/site/`: the Next.js marketing site.
+- `trace/`: empty, for AegisTrace. `shared/`: planned. Code moves there only once both products use it.
+- CI and release workflows now point at `mem/server`.
+- Verified after the move: backend 263 passed / 4 skipped (same as before), extension 22/22 unit tests, site `next build` OK.
+- Not done: renaming the GitHub repo and the local folder (needs the owner's approval). The roughly 222 untracked "* 2.*" files are iCloud duplicates; left untouched, delete manually.

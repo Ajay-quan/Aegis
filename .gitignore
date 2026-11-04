@@ -39,3 +39,4 @@ build/
 # macOS/iCloud sync-conflict copies
 * 2
 * 2.*
+next-env.d.ts
