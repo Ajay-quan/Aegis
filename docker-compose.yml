@@ -1,0 +1,94 @@
+# Local reference environment. Development credentials only; never reuse them.
+name: aegistrace
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: aegis_owner
+      POSTGRES_PASSWORD: dev-owner-password
+      POSTGRES_DB: aegistrace
+    ports: ["127.0.0.1:55432:5432"]
+    volumes:
+      - ./infrastructure/docker/postgres-init.sql:/docker-entrypoint-initdb.d/00-roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis_owner -d aegistrace"]
+      interval: 2s
+      retries: 30
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["127.0.0.1:56379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+  opa:
+    image: openpolicyagent/opa:1.4.2
+    command: ["run", "--server", "--watch", "--addr=0.0.0.0:8181", "/policies"]  # --watch: dev only; production ships signed bundles
+    ports: ["127.0.0.1:58181:8181"]
+    volumes:
+      - ./packages/aegisguard/policies:/policies:ro
+
+  migrate:
+    build: {context: ., dockerfile: infrastructure/docker/Dockerfile}
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      AEGIS_OWNER_DATABASE_URL: postgresql+psycopg://aegis_owner:dev-owner-password@postgres:5432/aegistrace
+    depends_on: {postgres: {condition: service_healthy}}
+    restart: "no"
+
+  api:
+    build: {context: ., dockerfile: infrastructure/docker/Dockerfile}
+    environment: &app_env
+      AEGIS_DATABASE_URL: postgresql+psycopg://aegis_app:dev-app-password@postgres:5432/aegistrace
+      AEGIS_DISPATCHER_DATABASE_URL: postgresql+psycopg://aegis_dispatcher:dev-dispatcher-password@postgres:5432/aegistrace
+      AEGIS_REDIS_URL: redis://redis:6379/0
+      AEGIS_OPA_URL: http://opa:8181
+      AEGIS_OIDC_ISSUER: https://dev-issuer.aegistrace.local
+      AEGIS_OIDC_AUDIENCE: aegistrace-api
+      AEGIS_OIDC_JWKS: /run/aegis/jwks.json
+      AEGIS_SIGNING_KEY_FILE: /run/aegis/signing-key.pem
+      AEGIS_DEV_ALLOW_SHARED_KEY_FILE: "1"  # local compose only; see evidence/signing.py
+      AEGIS_RATE_LIMIT_PER_MINUTE: ${AEGIS_RATE_LIMIT_PER_MINUTE:-600}
+    volumes: ["./.dev/secrets:/run/aegis:ro"]
+    ports: ["127.0.0.1:8000:8000"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 5s
+      retries: 20
+
+  worker:
+    build: {context: ., dockerfile: infrastructure/docker/Dockerfile}
+    command: ["aegistrace-worker"]
+    environment:
+      <<: *app_env
+      AEGIS_ANCHOR_FILE: /var/lib/aegis-anchor/checkpoints.jsonl
+    volumes:
+      - "./.dev/secrets:/run/aegis:ro"
+      - "./.dev/anchor:/var/lib/aegis-anchor"  # dev stand-in for S3 Object Lock / transparency log
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+  dispatcher:
+    build: {context: ., dockerfile: infrastructure/docker/Dockerfile}
+    command: ["aegistrace-dispatcher"]
+    environment: *app_env
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}

@@ -1,0 +1,30 @@
+This repository contains several components under different licenses.
+Each source file that carries an SPDX-License-Identifier header is governed by
+that header. Where a file has no header, the directory rules below apply.
+
+1. Apache License 2.0 (LICENSES/Apache-2.0.txt)
+   - packages/aegismem/, apps/memory-extension/, apps/site/   (AegisMem)
+   - packages/aegistrace/src/aegistrace/evidence/            (receipt format, offline verifier)
+   - apps/cli/                                                (aegistrace command-line interface)
+   - packages/sdk-python/, packages/sdk-typescript/           (AegisTrace SDKs)
+   - packages/aegisguard/policies/                            (example Rego policies)
+   - examples/
+
+   Copyright 2026 AegisMem contributors (AegisMem components)
+   Copyright 2026 AegisTrace contributors (AegisTrace components)
+
+2. Functional Source License 1.1, Apache 2.0 Future License
+   (FSL-1.1-ALv2, LICENSES/FSL-1.1-ALv2.md) applies to the remaining AegisTrace
+   components: apps/api/, apps/studio/, packages/aegisguard/,
+   packages/aegisruntime/, the rest of packages/aegistrace/, infrastructure/,
+   tests/ and scripts/.
+   Copyright 2026 AegisTrace contributors
+
+   In short: you may use, modify, and self-host it for any purpose except
+   offering a product or service that competes with AegisTrace. Two years
+   after each version is released, that version also becomes available under
+   the Apache License 2.0. The license text is authoritative; this summary
+   is not.
+
+New placeholder packages (aegiseval, aegisoptimize, aegismodels, contracts,
+local-runtime) contain no code yet; their license will be set when code lands.

@@ -1,0 +1,35 @@
+[project]
+name = "aegisruntime"
+version = "0.1.0.dev0"
+description = "AegisRuntime: durable runs, approvals, tool gateway, agents, replay and workers"
+requires-python = ">=3.12"
+license = "FSL-1.1-ALv2"
+dependencies = [
+    "aegistrace",
+    "aegisguard",
+    "anyio>=4",
+    "httpx>=0.28.1",
+    "jsonschema>=4.23",
+    "mcp>=1.20",
+    "prometheus-client>=0.21",
+    "psycopg>=3.3.6",
+    "pydantic>=2",
+    "redis>=5",
+    "sqlalchemy>=2.0",
+    "alembic>=1.20.1",
+]
+
+[project.scripts]
+aegistrace-worker = "aegisruntime.workers.main:worker_main"
+aegistrace-dispatcher = "aegisruntime.workers.main:dispatcher_main"
+
+[tool.uv.sources]
+aegistrace = { workspace = true }
+aegisguard = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aegisruntime"]

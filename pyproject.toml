@@ -1,0 +1,76 @@
+# AegisOS workspace root. Each engine and app is its own package (see members);
+# AegisMem (packages/aegismem) keeps its own setuptools build and is not a member.
+[project]
+name = "aegisos"
+version = "0.1.0.dev0"
+requires-python = ">=3.12"
+dependencies = ["aegistrace", "aegisguard", "aegisruntime", "aegis-api", "aegis-cli", "aegistrace-sdk"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "packages/aegistrace",
+    "packages/aegisguard",
+    "packages/aegisruntime",
+    "packages/sdk-python",
+    "apps/api",
+    "apps/cli",
+]
+
+[tool.uv.sources]
+aegistrace = { workspace = true }
+aegisguard = { workspace = true }
+aegisruntime = { workspace = true }
+aegis-api = { workspace = true }
+aegis-cli = { workspace = true }
+aegistrace-sdk = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "psycopg[binary]>=3.3.6",
+    "pytest>=8.4",
+    "hypothesis>=6.140",
+    "ruff>=0.14",
+    "mypy>=1.18",
+    "httpx>=0.28.1",
+    "types-jsonschema>=4.26.0.20261006",
+    "types-pyyaml>=6.0.12.20261030",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["tests/performance"]
+addopts = "-q"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["packages/aegismem", "apps/memory-extension", "apps/site", "apps/studio"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM"]
+ignore = ["S101"]
+
+[tool.mypy]
+strict = true
+mypy_path = ["packages/aegistrace/src", "packages/aegisguard/src", "packages/aegisruntime/src", "apps/api/src", "apps/cli/src", "packages/sdk-python/src"]
+explicit_package_bases = true
+files = ["packages/aegistrace/src", "packages/aegisguard/src", "packages/aegisruntime/src", "apps/api/src", "apps/cli/src", "packages/sdk-python/src"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aegistrace", "aegisguard", "aegisruntime", "aegis_api", "aegis_cli", "tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "E501", "F811"]
+"apps/api/src/aegis_api/app.py" = ["B008"]  # FastAPI Depends() idiom
+"packages/aegisguard/src/aegisguard/sandbox/docker_runner.py" = ["S108"]  # /tmp paths are inside the container
+"tests/performance/**" = ["S603", "S607", "E501"]
+"scripts/**" = ["S603", "S607"]
+
+[[tool.mypy.overrides]]
+# The SDK's HTTP layer returns decoded JSON (Any) by design.
+module = "aegistrace_sdk.client"
+warn_return_any = false

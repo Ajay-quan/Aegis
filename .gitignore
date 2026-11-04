@@ -40,3 +40,14 @@ build/
 * 2
 * 2.*
 next-env.d.ts
+
+# AegisTrace / workspace
+.dev
+.dev/
+.venv
+.venv.nosync/
+.hypothesis/
+.next.nosync/
+test-results/
+playwright-report/
+*.tsbuildinfo

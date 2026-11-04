@@ -1,0 +1,17 @@
+.venv
+**/__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.hypothesis
+.dev
+examples/receipts
+node_modules
+apps/studio
+apps/site
+apps/memory-extension
+packages/aegismem
+packages/sdk-typescript
+docs
+tests
+packages/sdk-typescript/node_modules

@@ -1,0 +1,8 @@
+# AegisMem's JS projects (apps/site, apps/memory-extension, packages/aegismem/sdk/typescript)
+# still use their own npm lockfiles; moving them here would change their resolved versions.
+packages:
+  - "apps/studio"
+  - "packages/sdk-typescript"
+
+# Supply-chain guard: only install versions published at least 7 days ago.
+minimumReleaseAge: 10080

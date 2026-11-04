@@ -1,0 +1,83 @@
+name: aegismem
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:   # reused by release.yml as the release gate
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/aegismem
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aegis
+          POSTGRES_PASSWORD: aegis
+          POSTGRES_DB: aegis_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aegis" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+      qdrant:
+        image: qdrant/qdrant:v1.17.0
+        ports: ["6333:6333"]
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      AEGIS_TEST_REDIS_URL: redis://localhost:6379/0
+      AEGIS_TEST_QDRANT: localhost:6333
+      AEGIS_TEST_PG_URL: postgresql+asyncpg://aegis:aegis@localhost:5432/aegis_test
+      AEGIS_MIGRATION_URL: postgresql://aegis:aegis@localhost:5432/aegis_migrations
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: packages/aegismem/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: packages/aegismem/sdk/typescript/package-lock.json
+      - name: Install
+        run: |
+          pip install -e ".[dev]"
+          npm ci --prefix sdk/typescript
+      - uses: azure/setup-helm@v4
+      - name: Helm chart lint
+        run: helm lint --strict infra/helm/aegismem
+      - name: TypeScript SDK typecheck
+        run: npm run typecheck --prefix sdk/typescript
+      - name: Migrations round-trip on Postgres
+        run: |
+          PGPASSWORD=aegis psql -h localhost -U aegis -d aegis_test -c "CREATE DATABASE aegis_migrations"
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+          alembic check
+      - name: Tests (SQLite + Postgres)
+        run: pytest -q
+      - name: aegis-bench (gated)
+        run: python -m bench.run --out bench-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-results-py${{ matrix.python }}
+          path: packages/aegismem/bench-results/
