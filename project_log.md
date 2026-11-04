@@ -678,3 +678,4 @@ The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its
 - Verified after the move: backend 263 passed / 4 skipped (same as before), extension 22/22 unit tests, site `next build` OK.
 - Not done: renaming the GitHub repo and the local folder (needs the owner's approval). The roughly 222 untracked "* 2.*" files are iCloud duplicates; left untouched, delete manually.
 - Follow-up: top-level folders renamed to `AegisMem/` and `AegisTrace/` so the GitHub repo `Aegis` holds both by name.
+- Pushed to github.com/Ajay-quan/Aegis `main` (fast-forward 3232415 → 735e690; the Aegis repo is the renamed AegisMem repo). The CI result on GitHub hasn't been checked yet.
