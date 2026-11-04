@@ -1,0 +1,8 @@
+# Secret scanning config. Only generated/ignored paths are allowlisted; source
+# files are scanned in full. Inline false positives use `gitleaks:allow`.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "git-ignored local dev secrets and build output"
+paths = ['''(^|/)\.dev/''', '''(^|/)\.next/''', '''(^|/)node_modules/''', '''(^|/)\.venv(\.nosync)?/''']

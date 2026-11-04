@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright 2026 AegisTrace contributors
+import { chromium } from "@playwright/test";
+import fs from "node:fs";
+const token = JSON.parse(fs.readFileSync(new URL("../../../.dev/tokens.json", import.meta.url))).user;
+const out = (n) => new URL(`../../../.dev/shots/${n}.png`, import.meta.url).pathname;
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+const p = await ctx.newPage();
+await p.goto("http://127.0.0.1:3100/login");
+await p.getByLabel("Access token").fill(token);
+await p.getByRole("button", { name: "Sign in" }).click();
+await p.getByRole("heading", { name: "Overview" }).waitFor();
+await p.waitForTimeout(2500);
+await p.screenshot({ path: out("p1-overview") });
+const svg = p.locator("svg[role=img]").first();
+const box = await svg.boundingBox();
+await p.mouse.move(box.x + box.width * 0.72, box.y + box.height * 0.6);
+await p.waitForTimeout(400);
+await p.screenshot({ path: out("p2-chart-hover"), clip: { x: box.x - 30, y: box.y - 70, width: box.width + 60, height: box.height + 90 } });
+await p.keyboard.press("Meta+k"); await p.waitForTimeout(300);
+await p.keyboard.type("app");
+await p.waitForTimeout(300);
+await p.screenshot({ path: out("p3-palette") });
+await p.keyboard.press("Escape");
+const m = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+await m.context().addCookies(await ctx.cookies());
+await m.goto("http://127.0.0.1:3100/"); await m.waitForTimeout(2500);
+await m.screenshot({ path: out("p4-mobile"), fullPage: false });
+await b.close();

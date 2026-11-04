@@ -1,0 +1,81 @@
+{
+  "started_at": "2026-10-31T15:11:46.613981+00:00",
+  "environment": {
+    "platform": "macOS-27.0-arm64-arm-64bit",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "cpu": "Apple M1 Pro",
+    "cpu_count": "8",
+    "memory_bytes": "17179869184"
+  },
+  "results": {
+    "event_append_hash": {
+      "n": 5000,
+      "p50_us": 41.25,
+      "p95_us": 45.875,
+      "p99_us": 79.959,
+      "mean_us": 43.3580798
+    },
+    "checkpoint_sign": {
+      "n": 2000,
+      "p50_us": 52.375,
+      "p95_us": 133.209,
+      "p99_us": 420.958,
+      "mean_us": 68.1747395
+    },
+    "verify_100_events": {
+      "n": 20,
+      "p50_us": 6238.208,
+      "p95_us": 8380.833,
+      "p99_us": 8380.833,
+      "mean_us": 6469.6062,
+      "events_per_second": 16030.244583059752,
+      "bundle_bytes": 11064,
+      "peak_python_heap_bytes": 431180
+    },
+    "reconstruct_100_events": {
+      "n": 20,
+      "p50_us": 19.208,
+      "p95_us": 45.041,
+      "p99_us": 45.041,
+      "mean_us": 20.6124,
+      "events_per_second": 5206164.098292379
+    },
+    "verify_1000_events": {
+      "n": 20,
+      "p50_us": 55285.75,
+      "p95_us": 63962.5,
+      "p99_us": 63962.5,
+      "mean_us": 56210.377049999996,
+      "events_per_second": 18087.843612504126,
+      "bundle_bytes": 99222,
+      "peak_python_heap_bytes": 4357312
+    },
+    "reconstruct_1000_events": {
+      "n": 20,
+      "p50_us": 210.125,
+      "p95_us": 286.5,
+      "p99_us": 286.5,
+      "mean_us": 219.49585000000002,
+      "events_per_second": 4759071.980963713
+    },
+    "verify_10000_events": {
+      "n": 5,
+      "p50_us": 575144.375,
+      "p95_us": 663732.917,
+      "p99_us": 663732.917,
+      "mean_us": 589201.75,
+      "events_per_second": 17386.938714301083,
+      "bundle_bytes": 980439,
+      "peak_python_heap_bytes": 43452707
+    },
+    "reconstruct_10000_events": {
+      "n": 5,
+      "p50_us": 2168.125,
+      "p95_us": 2826.75,
+      "p99_us": 2826.75,
+      "mean_us": 2303.2668,
+      "events_per_second": 4612280.196021909
+    }
+  }
+}

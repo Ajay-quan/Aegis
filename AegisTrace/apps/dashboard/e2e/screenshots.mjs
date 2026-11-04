@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright 2026 AegisTrace contributors
+import { chromium } from "@playwright/test";
+import fs from "node:fs";
+const token = JSON.parse(fs.readFileSync(new URL("../../../.dev/tokens.json", import.meta.url))).user;
+const out = (n) => new URL(`../../../.dev/shots/${n}.png`, import.meta.url).pathname;
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+await p.goto("http://127.0.0.1:3100/login");
+await p.screenshot({ path: out("01-login") });
+await p.getByLabel("Access token").fill(token);
+await p.getByRole("button", { name: "Sign in" }).click();
+await p.getByRole("heading", { name: "Overview" }).waitFor();
+await p.waitForTimeout(1500);
+await p.screenshot({ path: out("02-overview") });
+await p.goto("http://127.0.0.1:3100/runs"); await p.waitForTimeout(1500);
+await p.screenshot({ path: out("03-runs") });
+// open an injection run timeline
+await p.goto("http://127.0.0.1:3100/security"); await p.waitForTimeout(1500);
+await p.screenshot({ path: out("06-security") });
+const runLink = p.locator("tr", { hasText: "email.send" }).first().locator("a");
+await runLink.click(); await p.waitForTimeout(2000);
+const ev = p.getByRole("button", { name: /email.send — denied/ }).first();
+await ev.click(); await p.waitForTimeout(400);
+await p.screenshot({ path: out("04-run-timeline"), fullPage: true });
+await p.getByRole("tab", { name: "evidence" }).click(); await p.waitForTimeout(800);
+await p.screenshot({ path: out("05-run-evidence") });
+await p.getByRole("tab", { name: "replay" }).click(); await p.waitForTimeout(800);
+await p.screenshot({ path: out("05b-run-replay") });
+await p.goto("http://127.0.0.1:3100/approvals"); await p.waitForTimeout(1500);
+await p.screenshot({ path: out("07-approvals") });
+await p.goto("http://127.0.0.1:3100/agents"); await p.waitForTimeout(1500);
+await p.getByRole("button", { name: /research-agent/ }).first().click(); await p.waitForTimeout(800);
+await p.getByRole("button", { name: "Evaluate" }).click(); await p.waitForTimeout(800);
+await p.screenshot({ path: out("08-agents-policy") });
+await p.goto("http://127.0.0.1:3100/runs"); await p.waitForTimeout(800);
+await p.getByRole("button", { name: "New run" }).click(); await p.getByRole("button", { name: /Prompt injection/ }).click();
+await p.waitForTimeout(400);
+await p.screenshot({ path: out("09-new-run-drawer") });
+await p.goto("http://127.0.0.1:3100/operations"); await p.waitForTimeout(6000);
+await p.screenshot({ path: out("10-operations") });
+await b.close();
