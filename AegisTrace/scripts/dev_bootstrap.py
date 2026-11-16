@@ -16,6 +16,8 @@ import os
 import secrets
 from pathlib import Path
 
+from sqlalchemy import text
+
 from aegistrace.evidence.signer_service import KeyRing
 from aegistrace.identity.devissuer import DevIssuer
 from aegistrace.persistence.admin import provision_tenant
@@ -41,6 +43,7 @@ USER_SCOPES = [
     "payloads:read",
     "data:erase",
     "keys:manage",
+    "members:manage",
     "audit:read",
 ]
 AUDITOR_SCOPES = ["runs:read", "receipts:export", "replay:read", "audit:read"]
@@ -91,7 +94,16 @@ def main() -> None:
     (ROOT / ".dev" / "trust.json").write_text(json.dumps(trust, indent=2))
     active = ring.active_id()
 
-    provision_tenant(make_engine(OWNER_URL), args.tenant, args.tenant)
+    owner_engine = make_engine(OWNER_URL)
+    provision_tenant(owner_engine, args.tenant, args.tenant)
+    # Dev users: the admin owns the organization, the auditor is a read-only viewer.
+    with owner_engine.begin() as c:
+        for subject, role in (("usr_dev_admin", "owner"), ("usr_dev_auditor", "viewer")):
+            c.execute(
+                text("INSERT INTO members (tenant_id, subject, role, added_by) VALUES (:t, :s, :r, 'bootstrap') "
+                     "ON CONFLICT (tenant_id, subject) DO NOTHING"),
+                {"t": args.tenant, "s": subject, "r": role},
+            )
     tokens = {
         "user": issuer.mint("usr_dev_admin", args.tenant, USER_SCOPES, ttl=args.ttl),
         "auditor": issuer.mint("usr_dev_auditor", args.tenant, AUDITOR_SCOPES, ttl=args.ttl),

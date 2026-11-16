@@ -14,6 +14,8 @@ const ACTION: Record<string, string> = {
   "approval.approved": "Approved an action", "approval.rejected": "Rejected an action",
   "data.erased": "Erased run content", "data.erased_all": "Erased all run content",
   "legal_hold.placed": "Placed legal hold", "legal_hold.released": "Released legal hold",
+  "member.added": "Added a member", "member.role_changed": "Changed a role", "member.removed": "Removed a member",
+  "member.bootstrapped_owner": "First owner of the organization", "model_price.set": "Set a model price",
 };
 
 export default function Audit() {

@@ -34,6 +34,7 @@ ALL_SCOPES = [
     "payloads:read",
     "data:erase",
     "keys:manage",
+    "members:manage",
     "audit:read",
 ]
 

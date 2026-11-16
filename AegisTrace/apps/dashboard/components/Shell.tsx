@@ -26,7 +26,7 @@ export const I = {
 const NAV: [string, string, keyof typeof I][] = [
   ["/", "Overview", "overview"], ["/insights", "Insights", "insights"], ["/runs", "Runs", "runs"],
   ["/approvals", "Approvals", "approvals"], ["/agents", "Agents & permissions", "agents"], ["/rules", "Rules", "rules"], ["/memory", "Memory", "memory"], ["/security", "Security", "security"], ["/operations", "System health", "operations"],
-  ["/settings/usage", "Usage", "insights"], ["/settings/api-keys", "API keys", "settings"], ["/settings/audit", "Audit log", "rules"],
+  ["/settings/members", "Members", "agents"], ["/settings/usage", "Usage", "insights"], ["/settings/api-keys", "API keys", "settings"], ["/settings/audit", "Audit log", "rules"],
 ];
 
 export function Icon({ d }: { d: string }) {

@@ -24,14 +24,14 @@ from fastapi.responses import JSONResponse
 from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, Engine, text
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
 from aegistrace import tracing
 from aegistrace.approvals import service as approvals
 from aegistrace.authorization import rules as rules_mod
 from aegistrace.evidence.bundle import write_bundle_records
 from aegistrace.evidence.signing import Signer, b64
-from aegistrace.identity import apikeys
+from aegistrace.identity import apikeys, members
 from aegistrace.identity.jwt import AuthError, JwksCache, Principal, TokenValidator
 from aegistrace.orchestration import service as runs
 from aegistrace.orchestration.states import TERMINAL, IllegalTransition, RunState
@@ -103,6 +103,10 @@ class PriceIn(Strict):
     model_id: str = Field(min_length=1, max_length=120)
     input_usd_per_mtok: float = Field(ge=0, le=10_000)
     output_usd_per_mtok: float = Field(ge=0, le=10_000)
+
+
+class MemberIn(Strict):
+    role: str = Field(pattern="^(owner|admin|developer|viewer)$")
 
 
 class DecisionIn(Strict):
@@ -228,6 +232,12 @@ def create_app(deps: Deps) -> FastAPI:
                 raise HTTPException(503, "authentication temporarily unavailable") from exc
             if revoked:
                 raise HTTPException(401, "invalid token")
+        if p.kind == "user":
+            try:
+                with tenant_tx(deps.engine, p.tenant_id) as c:
+                    p, _ = members.resolve(c, p)
+            except members.NotAMember as exc:
+                raise HTTPException(403, "you are not a member of this organization") from exc
         _rate_limit(p)
         return p
 
@@ -886,6 +896,63 @@ def create_app(deps: Deps) -> FastAPI:
         except runs.Conflict as exc:
             raise HTTPException(409, str(exc)) from exc
         return {"id": approval_id, "status": status}
+
+    # -- members and roles -------------------------------------------------------------
+
+    def _my_role(c: Connection, p: Principal) -> str:
+        row = c.execute(text("SELECT role FROM members WHERE subject = :s"), {"s": p.subject}).one_or_none()
+        if row is None:
+            raise HTTPException(403, "only members can manage members")
+        return str(row[0])
+
+    @app.get("/v1/me")
+    def me(p: Principal = Depends(principal)) -> dict[str, Any]:
+        role = None
+        if p.kind == "user":
+            with tenant_tx(deps.engine, p.tenant_id) as c:
+                role = c.execute(text("SELECT role FROM members WHERE subject = :s"), {"s": p.subject}).scalar()
+        return {
+            "subject": p.subject,
+            "kind": p.kind,
+            "tenant_id": p.tenant_id,
+            "role": role,
+            "scopes": sorted(p.scopes),
+        }
+
+    @app.get("/v1/members")
+    def list_members(p: Principal = scoped("agents:read")) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            return {
+                "items": members.list_members(c),
+                "roles": {r: sorted(members.ROLE_SCOPES[r]) for r in members.ROLES},
+            }
+
+    @app.put("/v1/members/{subject}")
+    def put_member(subject: str, body: MemberIn, p: Principal = scoped(members.MEMBERS_SCOPE)) -> dict[str, Any]:
+        try:
+            with tenant_tx(deps.engine, p.tenant_id) as c:
+                return members.set_role(c, p, _my_role(c, p), subject, body.role)
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
+        except DBAPIError as exc:
+            if "at least one owner" in str(exc):
+                raise HTTPException(409, "an organization must keep at least one owner") from exc
+            raise
+
+    @app.delete("/v1/members/{subject}", status_code=204)
+    def delete_member(subject: str, p: Principal = scoped(members.MEMBERS_SCOPE)) -> Response:
+        try:
+            with tenant_tx(deps.engine, p.tenant_id) as c:
+                members.remove(c, p, _my_role(c, p), subject)
+        except LookupError as exc:
+            raise HTTPException(404, "member not found") from exc
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
+        except DBAPIError as exc:
+            if "at least one owner" in str(exc):
+                raise HTTPException(409, "an organization must keep at least one owner") from exc
+            raise
+        return Response(status_code=204)
 
     # -- usage and prices -------------------------------------------------------------
 

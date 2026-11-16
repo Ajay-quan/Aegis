@@ -256,3 +256,20 @@ test("usage: set a model price, run an agent, and see tokens and estimated cost"
   await page.goto("/settings/usage");
   await expect(page.locator("tr", { hasText: agent.id })).toBeVisible();
 });
+
+test("members: add a person, change their role, remove them", async ({ page }) => {
+  const who = `usr_pw_${Date.now()}`;
+  await login(page);
+  await page.goto("/settings/members");
+  await page.locator("#member-subject").fill(who);
+  await page.locator("#member-role").selectOption("viewer");
+  await page.getByRole("button", { name: "Add" }).click();
+  const row = page.locator("tr", { hasText: who });
+  await expect(row).toBeVisible();
+  await row.getByLabel(`Role for ${who}`).selectOption("developer");
+  await expect(page.getByText("Role changed")).toBeVisible();
+  await row.getByRole("button", { name: "Remove" }).click();
+  await expect(page.locator("tr", { hasText: who })).toHaveCount(0);
+  await page.goto("/settings/audit");
+  await expect(page.locator("tr", { hasText: who }).first()).toBeVisible();
+});

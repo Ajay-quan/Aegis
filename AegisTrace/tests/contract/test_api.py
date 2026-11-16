@@ -156,6 +156,7 @@ def test_full_flow_receipt_verifies_and_redaction(client, issuer, signer, tenant
     assert full.status_code == 200
     assert verify_bundle(full.content, trust, tenant.tenant_id, run_id).status is Status.VALID
 
+    assert client.put("/v1/members/usr_auditor", headers=h, json={"role": "viewer"}).status_code == 200
     auditor = auth(issuer, tenant.tenant_id, ["receipts:export", "runs:read"], sub="usr_auditor")
     redacted = client.get(f"/v1/runs/{run_id}/receipt", headers=auditor)
     rep = verify_bundle(redacted.content, trust, tenant.tenant_id, run_id)

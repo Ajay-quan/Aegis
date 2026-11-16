@@ -26,6 +26,7 @@ need() { command -v "$1" >/dev/null || { echo "missing: $1 ($2)"; exit 1; }; }
 bootstrap() {
   need docker "https://docs.docker.com/get-docker/"; need uv "https://docs.astral.sh/uv/"
   docker compose up -d --wait postgres redis opa
+  docker compose run --rm --build migrate >/dev/null  # schema first (rebuilt, so new migrations apply): bootstrap writes the demo tenant and its members
   # Idempotent: keeps existing dev keys, (re)provisions the demo tenant, mints fresh 8h tokens.
   pyenv && (cd "$T" && uv run python scripts/dev_bootstrap.py >/dev/null)
 }
