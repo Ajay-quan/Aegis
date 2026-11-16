@@ -1,0 +1,166 @@
+{
+  "measured_at": "20261116T160847Z",
+  "results": [
+    {
+      "phase": "scale-1",
+      "workers": 1,
+      "vus": 40,
+      "duration": "40s",
+      "fault_injected_at_s": null,
+      "runs_by_state": {
+        "SUCCEEDED": 665
+      },
+      "runs_per_s": 15.8,
+      "e2e_p50_ms": 2125,
+      "e2e_p95_ms": 4198,
+      "http_failed_rate": 0,
+      "outbox_pending_or_dead": 0,
+      "sequence_gaps": 0,
+      "duplicate_executions": 0,
+      "executions_without_allow": 0,
+      "denied_by_policy_outage": 0,
+      "receipts": {
+        "VALID": 665
+      },
+      "receipts_valid": 665
+    },
+    {
+      "phase": "scale-2",
+      "workers": 2,
+      "vus": 40,
+      "duration": "40s",
+      "fault_injected_at_s": null,
+      "runs_by_state": {
+        "SUCCEEDED": 852
+      },
+      "runs_per_s": 20.5,
+      "e2e_p50_ms": 1632,
+      "e2e_p95_ms": 3770,
+      "http_failed_rate": 0,
+      "outbox_pending_or_dead": 0,
+      "sequence_gaps": 0,
+      "duplicate_executions": 0,
+      "executions_without_allow": 0,
+      "denied_by_policy_outage": 0,
+      "receipts": {
+        "VALID": 852
+      },
+      "receipts_valid": 852
+    },
+    {
+      "phase": "scale-4",
+      "workers": 4,
+      "vus": 40,
+      "duration": "40s",
+      "fault_injected_at_s": null,
+      "runs_by_state": {
+        "SUCCEEDED": 1345
+      },
+      "runs_per_s": 32.7,
+      "e2e_p50_ms": 1141,
+      "e2e_p95_ms": 1687,
+      "http_failed_rate": 0,
+      "outbox_pending_or_dead": 0,
+      "sequence_gaps": 0,
+      "duplicate_executions": 0,
+      "executions_without_allow": 0,
+      "denied_by_policy_outage": 0,
+      "receipts": {
+        "VALID": 1345
+      },
+      "receipts_valid": 1345
+    },
+    {
+      "phase": "kill",
+      "workers": 3,
+      "vus": 40,
+      "duration": "40s",
+      "fault_injected_at_s": 8.0,
+      "runs_by_state": {
+        "SUCCEEDED": 894
+      },
+      "runs_per_s": 17.9,
+      "e2e_p50_ms": 1425,
+      "e2e_p95_ms": 2558,
+      "http_failed_rate": 0,
+      "outbox_pending_or_dead": 0,
+      "sequence_gaps": 0,
+      "duplicate_executions": 0,
+      "executions_without_allow": 0,
+      "denied_by_policy_outage": 0,
+      "receipts": {
+        "VALID": 894
+      },
+      "receipts_valid": 894
+    },
+    {
+      "phase": "redis",
+      "workers": 3,
+      "vus": 40,
+      "duration": "40s",
+      "fault_injected_at_s": 8.0,
+      "runs_by_state": {
+        "SUCCEEDED": 1201
+      },
+      "runs_per_s": 23.7,
+      "e2e_p50_ms": 1114,
+      "e2e_p95_ms": 1567,
+      "http_failed_rate": 0.016732792823874416,
+      "outbox_pending_or_dead": 0,
+      "sequence_gaps": 0,
+      "duplicate_executions": 0,
+      "executions_without_allow": 0,
+      "denied_by_policy_outage": 0,
+      "receipts": {
+        "VALID": 1201
+      },
+      "receipts_valid": 1201
+    },
+    {
+      "phase": "opa",
+      "workers": 3,
+      "vus": 40,
+      "duration": "40s",
+      "fault_injected_at_s": 8.0,
+      "runs_by_state": {
+        "SUCCEEDED": 1346
+      },
+      "runs_per_s": 32.6,
+      "e2e_p50_ms": 1148,
+      "e2e_p95_ms": 1713,
+      "http_failed_rate": 0,
+      "outbox_pending_or_dead": 0,
+      "sequence_gaps": 0,
+      "duplicate_executions": 0,
+      "executions_without_allow": 0,
+      "denied_by_policy_outage": 620,
+      "receipts": {
+        "VALID": 1346
+      },
+      "receipts_valid": 1346
+    },
+    {
+      "phase": "postgres",
+      "workers": 3,
+      "vus": 40,
+      "duration": "40s",
+      "fault_injected_at_s": 8.0,
+      "runs_by_state": {
+        "SUCCEEDED": 1031
+      },
+      "runs_per_s": 20.8,
+      "e2e_p50_ms": 1126,
+      "e2e_p95_ms": 2082,
+      "http_failed_rate": 0.03424340583063397,
+      "outbox_pending_or_dead": 0,
+      "sequence_gaps": 0,
+      "duplicate_executions": 0,
+      "executions_without_allow": 0,
+      "denied_by_policy_outage": 0,
+      "receipts": {
+        "VALID": 1031
+      },
+      "receipts_valid": 1031
+    }
+  ]
+}

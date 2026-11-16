@@ -4,7 +4,7 @@
 1. **Independent security review** of the sandbox, authentication/authorization, cryptographic protocol, tenant isolation and network controls (§48).
 2. **Managed signing backend.** Only the file-based dev signer exists. Verify Ed25519 support in the chosen KMS/HSM before choosing it, otherwise run a dedicated signing service. Implement `Signer` for it.
 3. ~~License~~ Done: split Apache-2.0 / FSL-1.1-ALv2 (ADR-021). If outside contributions are accepted, decide on a DCO or CLA first, so contributed code can be offered under both licenses.
-4. **CI never executed on GitHub.** The workflow now lives at the monorepo root (`.github/workflows/aegistrace.yml`). Third-party actions are pinned to commit SHAs resolved from each action's own repository; actionlint is clean.
+4. ~~CI never executed on GitHub~~ Done: CI runs on GitHub and is green (Python, TypeScript, supply chain with secret scan, Trivy and SBOM, AegisMem integration). Actions pinned to commit SHAs.
 5. **Release signing and provenance** (Sigstore/cosign, SLSA) are not implemented.
 
 ## Functional gaps
@@ -24,4 +24,4 @@
 16. Anchoring failures are counted and alerted (`aegis_anchor_failures_total`), but do not block new work.
 17. The rate limiter fails open when Redis is down (documented choice; revisit).
 18. ~~Reconciliation UI~~ Done (run page actions).
-19. Load tests above 50 VUs and with multiple workers; Postgres tuning.
+19. ~~Multiple workers and recovery under load~~ Done on one machine (docs/benchmarks/DISTRIBUTED.md): 1–4 workers; worker kill, Redis, OPA and Postgres faults; 7,334/7,334 receipts VALID. Remaining: multi-host runs, Postgres failover, longer soak tests.
