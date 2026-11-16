@@ -1,125 +1,24 @@
 "use client";
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright 2026 AegisTrace contributors
-// Public introduction to Aegis, shown before sign-in.
+// Public introduction to Aegis, shown before sign-in. Kept short: what it is, the pillars, the proof.
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Logo, ProductName } from "@/components/Logo";
 import "./welcome.css";
 
-type Status = "Built" | "In progress" | "Planned";
+type Status = "Available" | "In progress" | "Planned";
 
-// The eight pillars of the platform. Statuses describe what exists in the code today.
-const PILLARS: { name: string; line: string; body: string; points: [string, Status][] }[] = [
-  {
-    name: "Mem",
-    line: "Memory that lasts, and stays correct.",
-    body: "Persistent memory for agents, retrieved by meaning and by keyword. Contradictions are caught, and every fact can be traced, versioned and erased.",
-    points: [["Hybrid semantic and keyword retrieval", "Built"], ["Contradiction detection and reflection", "Built"], ["Knowledge-graph relationships", "In progress"]],
-  },
-  {
-    name: "Trace",
-    line: "Every step an agent takes, on the record.",
-    body: "One trace per run, from the request to the result, across every model and tool call. Each step is signed, so the record can be verified offline.",
-    points: [["End-to-end traces across services", "Built"], ["Signed, verifiable execution records", "Built"], ["Token usage and cost analytics", "Planned"]],
-  },
-  {
-    name: "Runtime",
-    line: "Runs that finish, even when things fail.",
-    body: "Agents execute on a durable state machine. When a worker crashes or a dependency restarts, another worker picks the run up exactly where it stopped.",
-    points: [["Durable orchestration with leases", "Built"], ["Recovery from crashes and outages", "Built"], ["Multi-agent workflow definitions", "Planned"]],
-  },
-  {
-    name: "Guard",
-    line: "Nothing runs until you allow it.",
-    body: "Default-deny permissions enforced outside the model. Risky actions wait for a person, and each organization is sealed off from every other.",
-    points: [["Policy enforcement and human approval", "Built"], ["Tenant isolation and encryption at rest", "Built"], ["Secure gateway for MCP tools", "Built"]],
-  },
-  {
-    name: "Eval",
-    line: "Know an agent is better before it ships.",
-    body: "Test suites, benchmarks and regression checks that show whether a change helped, and where it failed.",
-    points: [["Memory retrieval benchmarks", "Built"], ["Agent test suites and regression checks", "Planned"], ["Side-by-side model comparisons", "Planned"]],
-  },
-  {
-    name: "Optimize",
-    line: "The same answer, for fewer tokens.",
-    body: "Compress context, cache what repeats and route each task to the smallest model that does it well.",
-    points: [["Context compression", "Planned"], ["Response and retrieval caching", "Planned"], ["Cost reduction reports", "Planned"]],
-  },
-  {
-    name: "Models",
-    line: "Any model, hosted or local.",
-    body: "Bring commercial models, open-source LLMs and small local models under one registry, with serving and fine-tuning built in.",
-    points: [["Hosted and local model adapters", "In progress"], ["Model registry and routing", "Planned"], ["Fine-tuning with LoRA and QLoRA", "Planned"]],
-  },
-  {
-    name: "Studio",
-    line: "One place to build, watch and govern.",
-    body: "The workspace where developers inspect runs, review approvals, explore memory and manage the whole platform.",
-    points: [["Runs, approvals, rules, memory and security", "Built"], ["Sign-in with your company account", "Built"], ["Agent builder and model hub", "Planned"]],
-  },
-];
-
-const ROADMAP: { when: string; title: string; products: string[]; body: string; state: string }[] = [
-  { when: "Now", title: "Memory and evidence", products: ["Mem", "Trace"], body: "Reliable memory retrieval, signed execution records, trace inspection and developer APIs.", state: "Largely built" },
-  { when: "Next", title: "One workspace, governed", products: ["Studio", "Guard"], body: "The components brought together in one dashboard, with stronger authorization, audit and security controls.", state: "In progress" },
-  { when: "Later", title: "The full harness", products: ["Runtime", "Eval", "Optimize", "Models"], body: "Orchestration, evaluation, efficiency and local model management, each usable on its own.", state: "Planned" },
-];
-
-// Aegis Studio, the developer workspace. Statuses reflect the dashboard as it exists today.
-const STUDIO: { group: string; items: [string, string, Status][] }[] = [
-  { group: "Workspace", items: [
-    ["Overview", "Health, active agents, run volume, latency and what needs you.", "Built"],
-    ["Agent Builder", "Create agents, connect models and tools, define workflows.", "Planned"],
-    ["Memory Explorer", "Search and inspect what agents remember, and where it came from.", "In progress"],
-    ["Trace Viewer", "Every step of a run, with timings and verifiable evidence.", "Built"],
-    ["Model Hub", "Register hosted models, open-source LLMs and local SLMs.", "Planned"],
-  ] },
-  { group: "Operations", items: [
-    ["Security Center", "Permissions, rules, approvals, erasures and the audit trail.", "Built"],
-    ["Evaluation Lab", "Test suites, comparisons, failure cases and regressions.", "Planned"],
-    ["Optimization Center", "Context use, model cost and calls you can cut.", "Planned"],
-    ["Deployment Center", "Environments, runtime settings and service health.", "In progress"],
-    ["Settings and API keys", "Organizations, workspaces, credentials and webhooks.", "Planned"],
-  ] },
-];
-
-// Capabilities that run underneath every pillar.
-const CAPABILITIES: [string, string, Status][] = [
-  ["Verifiable execution", "Signed receipts for every run. Any change to the record is detected.", "Built"],
-  ["MCP security gateway", "Every tool an agent reaches through MCP is inspected, authorized and recorded.", "Built"],
-  ["Execution replay", "Rebuild a past run to debug it, without repeating a single side effect.", "Built"],
-  ["Multi-tenancy", "Organizations, agents, memories, keys and records sealed from one another.", "Built"],
-  ["SDKs and APIs", "Use any pillar on its own, from Python, TypeScript or plain REST.", "Built"],
-];
-
-// Integrations, grouped as in the platform plan. Available means it works in the code today.
-const INTEGRATIONS: { group: string; items: [string, boolean][] }[] = [
-  { group: "LLM providers", items: [["OpenAI and compatible APIs", true], ["Anthropic", true], ["Google Gemini", false]] },
-  { group: "Local inference", items: [["Ollama", true], ["llama.cpp", false], ["vLLM", false]] },
-  { group: "Model ecosystem", items: [["Hugging Face models for embeddings", true], ["Hugging Face Transformers", false]] },
-  { group: "Model adaptation", items: [["PEFT", false], ["LoRA", false], ["QLoRA", false], ["TRL", false]] },
-  { group: "Agent frameworks", items: [["LangGraph", true], ["LangChain", true], ["Custom agents", true]] },
-  { group: "Tool protocol", items: [["MCP, local and remote", true]] },
-  { group: "Databases", items: [["PostgreSQL", true], ["Qdrant", true], ["Neo4j", true]] },
-  { group: "Caching", items: [["Redis", true]] },
-  { group: "Backend", items: [["Python", true], ["FastAPI", true], ["REST APIs", true]] },
-  { group: "Cloud and deployment", items: [["Docker", true], ["AWS EC2, EBS and S3", false], ["Nginx", false]] },
-  { group: "Developer interfaces", items: [["Python SDK", true], ["TypeScript SDK", true]] },
-  { group: "Engineering", items: [["GitHub", true], ["CI/CD", true], ["Automated testing", true]] },
-];
-
-// The complete website, as planned. Only this introduction exists today.
-const SITE: [string, string][] = [
-  ["Platform", "How the whole harness works, end to end."],
-  ["Products", "A page for each of the eight pillars."],
-  ["Playground", "Try workflows, memory queries, models and tracing."],
-  ["Documentation", "Installation, API reference, SDKs and examples."],
-  ["Integrations", "Providers, frameworks, databases and tools."],
-  ["Architecture", "Diagrams, data flow and security boundaries."],
-  ["Research", "AegisMem research, benchmarks and findings."],
-  ["Changelog", "Releases, features and fixes."],
+// One line per pillar; the status reflects what runs in the code today.
+const PILLARS: [string, string, Status][] = [
+  ["Mem", "Memory that lasts, and stays correct.", "Available"],
+  ["Trace", "Every step an agent takes, on the record.", "Available"],
+  ["Guard", "Nothing runs until you allow it.", "Available"],
+  ["Runtime", "Runs that finish, even when things fail.", "Available"],
+  ["Models", "Any model, hosted or local.", "Available"],
+  ["Studio", "One place to build, watch and govern.", "In progress"],
+  ["Eval", "Know an agent is better before it ships.", "In progress"],
+  ["Optimize", "The same answer, for fewer tokens.", "Planned"],
 ];
 
 const FLOWS = [
@@ -130,13 +29,12 @@ const FLOWS = [
 const STEPS = ["Requested", "Checked against your rules", "Decided", "Signed into the record"];
 
 const PROOF = [
-  ["7,334", "of 7,334 runs verified", "after killing workers and restarting the queue, database and policy engine under load"],
-  ["0", "actions without a decision", "no tool ran without an explicit allow from your rules"],
-  ["~7 ms", "per policy check", "95th percentile, measured on a single laptop"],
-  ["249", "automated tests", "unit, security, end-to-end and browser, all passing"],
+  ["7,334", "of 7,334 runs verified", "with workers killed and services restarted under load"],
+  ["0", "actions without a decision", "nothing ran without an explicit allow"],
+  ["~7 ms", "per policy check", "95th percentile, on a single laptop"],
 ] as const;
 
-const SECTIONS = [["harness", "Harness"], ["pillars", "Pillars"], ["studio", "Studio"], ["roadmap", "Roadmap"], ["integrations", "Integrations"]] as const;
+const SECTIONS = [["harness", "Harness"], ["pillars", "Pillars"], ["proof", "Proof"]] as const;
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -169,10 +67,7 @@ function LiveAction() {
   const f = FLOWS[flow];
   return (
     <figure className="w-live" aria-label="An agent action passing through the harness">
-      <div className="w-live-head">
-        <span className="w-mono">{f.agent}</span>
-        <span className="w-live-state">Live</span>
-      </div>
+      <div className="w-live-head"><span className="w-mono">{f.agent}</span><span className="w-live-state">Live</span></div>
       <p className="w-live-act"><span className="w-mono">{f.act}</span><span className="w-live-about"> · {f.about}</span></p>
       <ol className="w-live-steps">
         {STEPS.map((label, i) => (
@@ -183,30 +78,6 @@ function LiveAction() {
         ))}
       </ol>
     </figure>
-  );
-}
-
-function ScrollStatement({ text }: { text: string }) {
-  const ref = useRef<HTMLParagraphElement>(null);
-  const [progress, setProgress] = useState(1);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const on = () => {
-      const r = el.getBoundingClientRect();
-      const vh = window.innerHeight;
-      setProgress(Math.min(1, Math.max(0, (vh * 0.85 - r.top) / (r.height + vh * 0.35))));
-    };
-    on();
-    window.addEventListener("scroll", on, { passive: true });
-    window.addEventListener("resize", on);
-    return () => { window.removeEventListener("scroll", on); window.removeEventListener("resize", on); };
-  }, []);
-  const words = text.split(" ");
-  return (
-    <p ref={ref} className="w-statement">
-      {words.map((w, i) => <span key={i} style={{ opacity: i / words.length < progress ? 1 : 0.16 }}>{w} </span>)}
-    </p>
   );
 }
 
@@ -224,7 +95,6 @@ function useReveal() {
   }, []);
 }
 
-/** Which section is under the reading line: highlights the matching link in the top bar. */
 function useCurrentSection() {
   const [current, setCurrent] = useState<string | null>(null);
   useEffect(() => {
@@ -236,62 +106,6 @@ function useCurrentSection() {
     return () => io.disconnect();
   }, []);
   return current;
-}
-
-function SectionHead({ eyebrow, title, intro }: { eyebrow: string; title: React.ReactNode; intro?: string }) {
-  return (
-    <header className="w-head" data-reveal>
-      <p className="w-eyebrow">{eyebrow}</p>
-      <h2 className="w-h2">{title}</h2>
-      {intro ? <p className="w-intro">{intro}</p> : null}
-    </header>
-  );
-}
-
-function Pillars() {
-  const [active, setActive] = useState(0);
-  const refs = useRef<(HTMLElement | null)[]>([]);
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => { if (e.isIntersecting) setActive(Number((e.target as HTMLElement).dataset.i)); }),
-      { rootMargin: "-45% 0px -50% 0px" },
-    );
-    refs.current.forEach((el) => el && io.observe(el));
-    return () => io.disconnect();
-  }, []);
-  return (
-    <section id="pillars" className="w-section">
-      <div className="w-pillars">
-        <div className="w-pillars-rail">
-          <p className="w-eyebrow">Eight pillars</p>
-          <h2 className="w-h2">One harness for production agents.</h2>
-          <p className="w-intro w-intro-rail">Each pillar works on its own through APIs and SDKs. Together they are the platform.</p>
-          <ol className="w-index">
-            {PILLARS.map((p, i) => (
-              <li key={p.name} data-active={i === active}>
-                <a href={`#pillar-${p.name.toLowerCase()}`}><span className="w-index-n">0{i + 1}</span><ProductName name={p.name} /></a>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="w-pillars-list">
-          {PILLARS.map((p, i) => (
-            <article key={p.name} id={`pillar-${p.name.toLowerCase()}`} data-i={i}
-                     ref={(el) => { refs.current[i] = el; }} className="w-pillar" data-active={i === active} data-reveal>
-              <p className="w-pillar-name"><span className="w-index-n">0{i + 1}</span><ProductName name={p.name} /></p>
-              <h3>{p.line}</h3>
-              <p className="w-pillar-body">{p.body}</p>
-              <ul>
-                {p.points.map(([text, status]) => (
-                  <li key={text}><span>{text}</span><em data-status={status}>{status}</em></li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
 }
 
 export default function Welcome() {
@@ -325,12 +139,12 @@ export default function Welcome() {
             <p className="w-eyebrow">The agent harness</p>
             <h1><span className="w-keep">Agents that act.</span><br /><span>A harness that answers for them.</span></h1>
             <p className="w-lede">
-              Aegis is the platform around your AI agents. It gives them memory, decides what they may do, asks a
-              person when it matters, and keeps a record anyone can verify.
+              Aegis gives AI agents memory, decides what they may do, asks a person when it matters, and keeps a record
+              anyone can verify.
             </p>
             <div className="w-cta">
               <Link href="/login" className="w-btn w-btn-primary">Sign in</Link>
-              <a href="#pillars" className="w-btn">Explore the platform</a>
+              <a href="#pillars" className="w-btn">See the platform</a>
             </div>
           </div>
           <LiveAction />
@@ -338,7 +152,9 @@ export default function Welcome() {
 
         <section id="harness" className="w-section">
           <p className="w-eyebrow" data-reveal>What a harness is</p>
-          <ScrollStatement text="A harness is everything around the model that makes its work safe to trust. It remembers, it decides, it records, and it lets a person step in. The model proposes. The harness disposes." />
+          <p className="w-statement" data-reveal>
+            Everything around the model that makes its work safe to trust. <span>The model proposes. The harness disposes.</span>
+          </p>
           <ol className="w-flow" data-reveal>
             {["Agent proposes", "Rules decide", "People approve", "Record proves"].map((s, i) => (
               <li key={s} className="w-flow-step"><span className="w-index-n">0{i + 1}</span><p>{s}</p></li>
@@ -346,58 +162,28 @@ export default function Welcome() {
           </ol>
         </section>
 
-        <Pillars />
-
-        <section id="studio" className="w-section">
-          <SectionHead eyebrow="Aegis Studio" title="The workspace where it all comes together."
-                       intro="One control center to build agents, explore memory, inspect traces and run the platform." />
-          <div className="w-studio">
-            {STUDIO.map((g) => (
-              <div key={g.group} className="w-list-group" data-reveal>
-                <p className="w-list-name">{g.group}</p>
-                <ul className="w-rows">
-                  {g.items.map(([name, desc, status]) => (
-                    <li key={name}>
-                      <div><p className="w-row-title">{name}</p><p className="w-row-desc">{desc}</p></div>
-                      <em data-status={status}>{status}</em>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section id="capabilities" className="w-section">
-          <SectionHead eyebrow="Underneath every pillar" title="The guarantees that hold it together." />
-          <ul className="w-caps">
-            {CAPABILITIES.map(([name, desc, status]) => (
-              <li key={name} data-reveal>
-                <p className="w-row-title">{name}</p>
-                <p className="w-row-desc">{desc}</p>
+        <section id="pillars" className="w-section">
+          <header className="w-head" data-reveal>
+            <p className="w-eyebrow">Eight pillars</p>
+            <h2 className="w-h2">One harness for production agents.</h2>
+            <p className="w-intro">Use each on its own through APIs and SDKs, or all of them together.</p>
+          </header>
+          <ul className="w-grid">
+            {PILLARS.map(([name, line, status]) => (
+              <li key={name} id={`pillar-${name.toLowerCase()}`} className="w-card" data-reveal>
+                <p className="w-card-name"><ProductName name={name} /></p>
+                <p className="w-card-line">{line}</p>
                 <em data-status={status}>{status}</em>
               </li>
             ))}
           </ul>
         </section>
 
-        <section id="roadmap" className="w-section">
-          <SectionHead eyebrow="Roadmap" title="Built in the order that earns trust."
-                       intro="Memory and evidence come first, because everything else depends on them." />
-          <ol className="w-roadmap">
-            {ROADMAP.map((r) => (
-              <li key={r.when} className="w-stage" data-reveal>
-                <div className="w-stage-top"><span className="w-stage-when">{r.when}</span><span className="w-stage-state">{r.state}</span></div>
-                <h3>{r.title}</h3>
-                <p className="w-stage-products">{r.products.map((p) => <ProductName key={p} name={p} />)}</p>
-                <p className="w-stage-body">{r.body}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
-
         <section id="proof" className="w-section">
-          <SectionHead eyebrow="Proof, not promises" title="Measured, then stated." />
+          <header className="w-head" data-reveal>
+            <p className="w-eyebrow">Proof, not promises</p>
+            <h2 className="w-h2">Measured, then stated.</h2>
+          </header>
           <div className="w-proof-grid">
             {PROOF.map(([n, label, note]) => (
               <div key={label} className="w-proof-cell" data-reveal>
@@ -409,44 +195,10 @@ export default function Welcome() {
           </div>
         </section>
 
-        <section id="integrations" className="w-section">
-          <SectionHead eyebrow="Integrations" title="Works with the stack you already run."
-                       intro="Available today is marked plainly. Everything else is on the roadmap, not in the product." />
-          <div className="w-integrations" data-reveal>
-            {INTEGRATIONS.map((g) => (
-              <div key={g.group} className="w-int-group">
-                <p className="w-int-name">{g.group}</p>
-                <ul>
-                  {g.items.map(([x, ok]) => (
-                    <li key={x} className={ok ? undefined : "w-int-planned"}>{x}{ok ? null : <em>Planned</em>}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section id="site" className="w-section">
-          <SectionHead eyebrow="Coming to this site" title="Everything Aegis will offer."
-                       intro="This introduction is the first page. The rest of the site follows the same plan." />
-          <ul className="w-site" data-reveal>
-            {SITE.map(([name, desc]) => (
-              <li key={name}>
-                <div className="w-site-top"><p className="w-row-title">{name}</p><em>Coming</em></div>
-                <p className="w-row-desc">{desc}</p>
-              </li>
-            ))}
-            <li className="w-site-live">
-              <div className="w-site-top"><p className="w-row-title">Open source</p><a href="https://github.com/Ajay-quan/Aegis">GitHub</a></div>
-              <p className="w-row-desc">Code, contribution guides and examples.</p>
-            </li>
-          </ul>
-        </section>
-
         <section className="w-close" data-reveal>
           <h2>Give your agents room to act.<br /><span>Keep the right to know.</span></h2>
           <Link href="/login" className="w-btn w-btn-primary">Sign in</Link>
-          <p className="w-honest">Aegis is pre-release and runs on your own infrastructure. An independent security review comes next.</p>
+          <p className="w-honest">Pre-release. Runs on your own infrastructure.</p>
         </section>
       </main>
 

@@ -7,7 +7,7 @@ import Link from "next/link";
 export function Logo({ href = "/welcome", product, size = 17 }: { href?: string; product?: string; size?: number }) {
   return (
     <Link href={href} className="aegis-logo" style={{ fontSize: size }} aria-label={product ? `Aegis ${product}` : "Aegis"}>
-      <span className="aegis-logo-word">Aegis</span>
+      <span className="aegis-logo-word">Aegis<span className="aegis-logo-dot">.</span></span>
       {product ? <span className="aegis-logo-product">{product}</span> : null}
     </Link>
   );

@@ -203,7 +203,7 @@ test("visitors see the harness introduction first, with sign-in at the top right
   await page.goto("/");
   await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Agents that act.");
-  for (const p of ["Mem", "Trace", "Runtime", "Guard", "Eval", "Optimize", "Models", "Studio"]) {
+  for (const p of ["Mem", "Trace", "Guard", "Runtime", "Models", "Studio", "Eval", "Optimize"]) {
     await expect(page.locator(`#pillar-${p.toLowerCase()}`)).toHaveCount(1);
   }
   const signIn = page.getByRole("banner").getByRole("link", { name: "Sign in" });
@@ -336,7 +336,7 @@ test("agent builder: create an agent, give it instructions, save a version, run 
   await page.locator("#agent-instructions").fill("Summarize in one sentence.");
   await page.locator("#agent-note").fill("first instructions");
   await page.getByRole("button", { name: "Save new version" }).click();
-  await expect(page.getByText("version 2")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /version 2/ })).toBeVisible();
   await expect(page.getByText("first instructions")).toBeVisible();
   await page.locator("#agent-task").fill("Say hello");
   await page.getByRole("button", { name: "Run", exact: true }).click();
