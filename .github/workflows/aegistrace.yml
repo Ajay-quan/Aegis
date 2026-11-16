@@ -1,18 +1,24 @@
-name: ci
+name: aegistrace
 
 on:
   push:
     branches: [main]
+    paths: ["AegisTrace/**", ".github/workflows/aegistrace.yml"]
   pull_request:
+    paths: ["AegisTrace/**", ".github/workflows/aegistrace.yml"]
 
 permissions:
   contents: read
 
-# TODO(supply-chain): pin third-party actions to full commit SHAs (resolve and
-# review them; do not copy SHAs from untrusted sources). Tracked in OPEN_ISSUES.
+defaults:
+  run:
+    working-directory: AegisTrace
+
+# Third-party actions are pinned to full commit SHAs (resolved from each
+# action's own repository; the tag is in the trailing comment).
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: aegistrace-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,10 +37,10 @@ jobs:
     env:
       AEGIS_OWNER_DATABASE_URL: postgresql+psycopg://aegis_owner:ci-owner-password@127.0.0.1:55432/aegistrace_test
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
         with: {persist-credentials: false}
-      - uses: astral-sh/setup-uv@v6
-        with: {version: "0.9.5"}
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
+        with: {version: "0.9.5", working-directory: AegisTrace}
       - run: uv sync --frozen
       - name: Lint and type-check
         run: uv run ruff check . && uv run ruff format --check . && uv run mypy
@@ -52,7 +58,7 @@ jobs:
         run: |
           docker run -d --name opa-ci -p 58181:8181 -v "$PWD/policies:/policies:ro" openpolicyagent/opa:1.4.2 \
             run --server --addr=0.0.0.0:8181 /policies
-          for i in $(seq 1 30); do curl -sf localhost:58181/health && break; sleep 1; done
+          for _ in $(seq 1 30); do curl -sf localhost:58181/health && break; sleep 1; done
       - name: Tests (unit, property, fuzz, security, integration, e2e, contract, failure-injection)
         env:
           AEGIS_OWNER_DATABASE_URL: postgresql+psycopg://aegis_owner:ci-owner-password@127.0.0.1:55432/aegistrace_test
@@ -64,23 +70,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
         with: {persist-credentials: false}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444  # v5.0.0
         with: {node-version: "22.20.0"}
       - run: npm ci && npm test && npm audit --omit=dev
-        working-directory: packages/sdk-typescript
+        working-directory: AegisTrace/packages/sdk-typescript
       - run: npm ci && npx tsc --noEmit && npx next build && npm audit --omit=dev
-        working-directory: apps/dashboard
+        working-directory: AegisTrace/apps/dashboard
 
   supply-chain:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
         with: {persist-credentials: false, fetch-depth: 0}
       - name: Secret scan
-        run: docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.28.0 git /repo --no-banner --redact --config /repo/.gitleaks.toml
+        run: docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.28.0 dir /repo --no-banner --redact --config /repo/.gitleaks.toml
       - name: Build image
         run: docker build -f infra/docker/Dockerfile -t aegistrace:ci .
       - name: Image vulnerability scan (fail on fixable HIGH/CRITICAL)
@@ -91,5 +97,5 @@ jobs:
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock anchore/syft:v1.33.0 \
             aegistrace:ci -o cyclonedx-json > sbom.cdx.json
-      - uses: actions/upload-artifact@v4
-        with: {name: sbom, path: sbom.cdx.json}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with: {name: sbom, path: AegisTrace/sbom.cdx.json}

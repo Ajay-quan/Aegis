@@ -1,0 +1,38 @@
+name: integration
+
+# AegisTrace's memory tools against a real AegisMem server: the two products'
+# APIs must stay compatible.
+on:
+  push:
+    branches: [main]
+    paths: ["AegisMem/server/**", "AegisTrace/packages/core/src/aegistrace/tools/**", "AegisTrace/tests/contract/**", ".github/workflows/integration.yml"]
+  pull_request:
+    paths: ["AegisMem/server/**", "AegisTrace/packages/core/src/aegistrace/tools/**", "AegisTrace/tests/contract/**", ".github/workflows/integration.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  aegismem-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with: {python-version: "3.12"}
+      - name: Start AegisMem (in-memory stores, mock models)
+        working-directory: AegisMem/server
+        env: {AEGIS_ENV_FILE: "", DEFAULT_LLM_PROVIDER: mock}
+        run: |
+          pip install -e .
+          nohup python -m uvicorn apps.api.main:app --port 8100 > /tmp/aegismem.log 2>&1 &
+          for _ in $(seq 1 60); do curl -sf localhost:8100/health && break; sleep 1; done
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
+        with: {version: "0.9.5", working-directory: AegisTrace}
+      - name: Contract test
+        working-directory: AegisTrace
+        env: {AEGIS_TEST_MEMORY_URL: "http://127.0.0.1:8100"}
+        run: uv sync --frozen && uv run pytest -q tests/contract/test_aegismem_contract.py -rs
+      - if: failure()
+        run: cat /tmp/aegismem.log

@@ -1,0 +1,38 @@
+name: aegismem-extension
+
+on:
+  push:
+    branches: [main]
+    paths: ["AegisMem/extension/**", ".github/workflows/aegismem-extension.yml"]
+  pull_request:
+    paths: ["AegisMem/extension/**", ".github/workflows/aegismem-extension.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aegismem-extension-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: AegisMem/extension
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444  # v5.0.0
+        with: {node-version: "22.20.0"}
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test
+      - name: Build and package
+        run: npm run build && npm run package
+      - name: End-to-end (real Chromium + built extension)
+        run: npx playwright install --with-deps chromium && xvfb-run -a npm run e2e
