@@ -100,8 +100,10 @@ def main() -> None:
     with owner_engine.begin() as c:
         for subject, role in (("usr_dev_admin", "owner"), ("usr_dev_auditor", "viewer")):
             c.execute(
-                text("INSERT INTO members (tenant_id, subject, role, added_by) VALUES (:t, :s, :r, 'bootstrap') "
-                     "ON CONFLICT (tenant_id, subject) DO NOTHING"),
+                text(
+                    "INSERT INTO members (tenant_id, subject, role, added_by) VALUES (:t, :s, :r, 'bootstrap') "
+                    "ON CONFLICT (tenant_id, subject) DO NOTHING"
+                ),
                 {"t": args.tenant, "s": subject, "r": role},
             )
     tokens = {
