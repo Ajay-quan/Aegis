@@ -4,10 +4,11 @@
 1. **Independent security review** of the sandbox, authentication/authorization, cryptographic protocol, tenant isolation and network controls (§48).
 2. **Managed signing backend.** Only the file-based dev signer exists. Verify Ed25519 support in the chosen KMS/HSM before choosing it, otherwise run a dedicated signing service. Implement `Signer` for it.
 3. ~~License~~ Done: split Apache-2.0 / FSL-1.1-ALv2 (ADR-021). If outside contributions are accepted, decide on a DCO or CLA first, so contributed code can be offered under both licenses.
-4. **CI never executed on GitHub.** Also pin third-party actions to reviewed commit SHAs.
+4. **CI never executed on GitHub.** The workflow now lives at the monorepo root (`.github/workflows/aegistrace.yml`). Third-party actions are pinned to commit SHAs resolved from each action's own repository; actionlint is clean.
 5. **Release signing and provenance** (Sigstore/cosign, SLSA) are not implemented.
 
 ## Functional gaps
+- ~~Memory~~ Done: governed memory via AegisMem (`memory.recall/remember/forget`), see `tools/memory.py` and `examples/governed_memory`.
 6. Remote MCP servers (Streamable HTTP) with OAuth 2.1 and audience-bound tokens; MCP conformance testing.
 7. Data retention, privacy deletion (crypto-shredding of payload encryption keys), legal hold, envelope encryption of payloads (§32–33). Payloads are currently plaintext JSONB, protected by RLS and managed encryption at rest only.
 8. OpenTelemetry tracing and Grafana dashboards. (Prometheus alert rules: done, `infra/observability/alerts.yml`, promtool-validated.)
