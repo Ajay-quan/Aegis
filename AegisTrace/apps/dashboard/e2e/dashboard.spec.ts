@@ -188,12 +188,13 @@ test("privacy: erase a finished run's content from its page; the erasure is logg
   await page.getByRole("button", { name: "Place legal hold" }).click();
   await expect(page.getByRole("button", { name: "Erase content" })).toHaveCount(0);  // held runs cannot be erased
   await page.getByRole("button", { name: "Release legal hold" }).click();
-  page.once("dialog", (d) => d.accept("customer deletion request"));
+  const reason = `customer deletion request ${id}`;  // unique: the erasure log persists across test runs
+  page.once("dialog", (d) => d.accept(reason));
   await page.getByRole("button", { name: "Erase content" }).click();
   await expect(page.getByText("content erased")).toBeVisible();
   await expect(page.getByText("secret answer")).toHaveCount(0);
   await page.getByRole("tab", { name: "evidence" }).click();
   await expect(page.getByText("Chain intact and signed")).toBeVisible();  // evidence survives erasure
   await page.goto("/security");
-  await expect(page.locator("tr", { hasText: "customer deletion request" })).toHaveCount(1);
+  await expect(page.locator("tr", { hasText: reason })).toHaveCount(1);
 });

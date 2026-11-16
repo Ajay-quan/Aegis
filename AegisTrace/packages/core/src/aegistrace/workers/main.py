@@ -13,6 +13,7 @@ from typing import Any
 import redis
 from prometheus_client import start_http_server
 
+from aegistrace import tracing
 from aegistrace.agents.model import MockModel, ModelAdapter, OpenAICompatibleModel
 from aegistrace.api.logging import configure
 from aegistrace.authorization.policy import OpaPolicyEngine
@@ -49,6 +50,7 @@ def model_factory(provider: str, model_id: str, run_input: dict[str, Any]) -> Mo
 
 def worker_main() -> None:
     configure()
+    tracing.configure("worker")
     sealing.configure_from_env()
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT, _on_signal)
@@ -99,6 +101,7 @@ def worker_main() -> None:
 
 def dispatcher_main() -> None:
     configure()
+    tracing.configure("dispatcher")
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT, _on_signal)
     start_http_server(int(os.environ.get("AEGIS_METRICS_PORT", "9102")))

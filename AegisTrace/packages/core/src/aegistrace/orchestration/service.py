@@ -13,10 +13,12 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from aegistrace import tracing
 from aegistrace.evidence.canonical import canonicalize
 from aegistrace.evidence.checkpoint import CheckpointBody, sign_checkpoint
 from aegistrace.evidence.events import Event, SealedEvent, genesis_hash, payload_digest
 from aegistrace.evidence.signing import Signer
+from aegistrace.observability import RUNS_FINISHED
 from aegistrace.persistence import sealing
 
 from .states import OPERATOR_ONLY, TERMINAL, RunState, check_transition
@@ -160,6 +162,7 @@ def enqueue(
     payload: dict[str, Any],
     available_at: datetime | None = None,
 ) -> None:
+    payload = {**payload, **tracing.inject()}  # the worker continues this trace
     conn.execute(
         text(
             "INSERT INTO outbox (tenant_id, run_id, topic, payload, available_at) "
@@ -208,6 +211,8 @@ def transition(
         )
     conn.execute(text(sql + " WHERE id = :id"), params)
     _append_event(conn, run, "run.state_changed", actor, {"from": prev.value, "to": target.value, **(payload or {})})
+    if target in TERMINAL or target in (RunState.WAITING_FOR_APPROVAL, RunState.NEEDS_RECONCILIATION):
+        RUNS_FINISHED.labels(target.value).inc()  # counted at commit-time intent; a rollback over-counts by one
     if target is RunState.QUEUED:
         enqueue(conn, run.tenant_id, run.id, "run.execute", {"run_id": run.id})
     return run

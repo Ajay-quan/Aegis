@@ -45,8 +45,10 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from mcp.types import TextContent
+from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, ConfigDict, RootModel, model_validator
 
+from aegistrace import tracing
 from aegistrace.evidence.events import payload_digest
 from aegistrace.tools.registry import RiskClass, ToolContext, ToolRegistry, ToolSpec
 
@@ -236,6 +238,16 @@ def discover(cfg: McpServerConfig) -> list[DiscoveredTool]:
 
 
 async def _call(cfg: McpServerConfig, tool: str, arguments: dict[str, Any]) -> McpOutput:
+    attrs = {
+        "aegis.mcp.server": cfg.server_id,
+        "aegis.mcp.tool": tool,
+        "aegis.mcp.transport": "http" if cfg.url else "stdio",
+    }
+    with tracing.span("mcp.call_tool", attrs, kind=SpanKind.CLIENT):
+        return await _call_inner(cfg, tool, arguments)
+
+
+async def _call_inner(cfg: McpServerConfig, tool: str, arguments: dict[str, Any]) -> McpOutput:
     with anyio.fail_after(cfg.timeout_seconds):
         async with _session(cfg) as session:
             result = await session.call_tool(tool, arguments)

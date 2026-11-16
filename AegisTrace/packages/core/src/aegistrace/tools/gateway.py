@@ -25,6 +25,7 @@ from typing import Any, Literal
 from pydantic import ValidationError
 from sqlalchemy import Connection, Engine, text
 
+from aegistrace import tracing
 from aegistrace.approvals import service as approvals
 from aegistrace.authorization import rules
 from aegistrace.authorization.policy import Decision, PolicyEngine
@@ -149,6 +150,20 @@ class ToolGateway:
     def invoke(
         self, *, tenant_id: str, agent_id: str, lease: Lease, step: int, tool_name: str, raw_args: Any
     ) -> ToolOutcome:
+        attrs = {"aegis.tool": tool_name, "aegis.run_id": lease.run_id, "aegis.agent_id": agent_id, "aegis.step": step}
+        with tracing.span(f"tool {tool_name}", attrs) as s:
+            outcome = self._invoke(
+                tenant_id=tenant_id, agent_id=agent_id, lease=lease, step=step, tool_name=tool_name, raw_args=raw_args
+            )
+            s.set_attribute("aegis.outcome", outcome.status)
+            s.set_attribute("aegis.reason", outcome.reason)
+            if outcome.status == "failed":
+                tracing.fail(s, outcome.reason)
+            return outcome
+
+    def _invoke(
+        self, *, tenant_id: str, agent_id: str, lease: Lease, step: int, tool_name: str, raw_args: Any
+    ) -> ToolOutcome:
         started = time.perf_counter()
         actor = Actor(f"gateway:{agent_id}", "service")
         base = {"step": step, "tool": tool_name, "arguments_digest": _safe_digest(raw_args)}
@@ -190,7 +205,11 @@ class ToolGateway:
             tenant_id, agent_id, spec, resource, classification, grants, bool(live and live[1] == "approved"), org_rules
         )
         t0 = time.perf_counter()
-        decision = self._policy.evaluate(policy_input)
+        with tracing.span("policy.evaluate", {"aegis.tool": spec.name, "aegis.risk_class": int(spec.risk_class)}) as ps:
+            decision = self._policy.evaluate(policy_input)
+            ps.set_attribute("aegis.decision", decision.result)
+            ps.set_attribute("aegis.reason", decision.reason)
+            ps.set_attribute("aegis.policy_revision", decision.policy_revision or "")
         POLICY_LATENCY.observe(time.perf_counter() - t0)
         TOOL_DECISIONS.labels(decision.result, decision.reason).inc()
 
@@ -266,7 +285,8 @@ class ToolGateway:
         GATEWAY_OVERHEAD.observe(time.perf_counter() - started)
         ctx = ToolContext(tenant_id, lease.run_id, idempotency_key=call_key.removeprefix("sha256:"))
         try:
-            out = spec.execute(ctx, args)
+            with tracing.span("tool.execute", {"aegis.tool": spec.name, "aegis.retry_safe": spec.retry_safe}):
+                out = spec.execute(ctx, args)
             if not isinstance(out, spec.output_model):
                 raise TypeError("tool returned unexpected output type")
             output = out.model_dump(mode="json")

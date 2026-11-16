@@ -10,6 +10,7 @@ failing are moved to a dead-letter stream (poison-message handling).
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import socket
@@ -17,8 +18,10 @@ from datetime import timedelta
 from typing import Any
 
 import redis
+from opentelemetry.trace import SpanKind
 from sqlalchemy import Engine
 
+from aegistrace import tracing
 from aegistrace.agents.runner import ModelFactory, run_agent
 from aegistrace.evidence.anchor import Anchor
 from aegistrace.evidence.signing import Signer
@@ -70,12 +73,28 @@ class Worker:
         if fields.get("topic") != "run.execute":
             return
         tenant_id, run_id = fields["tenant_id"], fields["run_id"]
-        with tenant_tx(self.engine, tenant_id) as c:
-            lease = leases.claim(c, run_id, self.id, self.ttl)
-        if lease is None:
-            return  # duplicate delivery or run no longer queued
-        run_agent(self.engine, tenant_id, lease, self.model_factory, self.gateway, self.registry, self.ttl, self.id)
-        self.seal(tenant_id, run_id)
+        try:
+            parent = {
+                k: v for k, v in json.loads(fields.get("payload") or "{}").items() if k in ("traceparent", "tracestate")
+            }
+        except ValueError:
+            parent = {}
+        attrs = {"aegis.run_id": run_id, "aegis.tenant_id": tenant_id, "aegis.worker_id": self.id}
+        with tracing.span("run.execute", attrs, kind=SpanKind.CONSUMER, parent=parent) as s:
+            with tenant_tx(self.engine, tenant_id) as c:
+                lease = leases.claim(c, run_id, self.id, self.ttl)
+            if lease is None:
+                s.set_attribute("aegis.skipped", "not_queued")
+                return  # duplicate delivery or run no longer queued
+            s.set_attribute("aegis.attempt", lease.attempt)
+            state = run_agent(
+                self.engine, tenant_id, lease, self.model_factory, self.gateway, self.registry, self.ttl, self.id
+            )
+            s.set_attribute("aegis.state", state.value)
+            if state.value in ("FAILED", "TIMED_OUT", "NEEDS_RECONCILIATION"):
+                tracing.fail(s, state.value)
+            with tracing.span("evidence.checkpoint", {"aegis.run_id": run_id}):
+                self.seal(tenant_id, run_id)
 
     def seal(self, tenant_id: str, run_id: str) -> None:
         """Sign a checkpoint at every resting point and publish it to the anchor."""

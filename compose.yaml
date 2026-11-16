@@ -96,5 +96,36 @@ services:
       api: {condition: service_healthy}
       dev-idp: {condition: service_healthy}
 
+  # Optional monitoring: ./aegis up --observability
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    profiles: ["observability"]
+    volumes:
+      - ./AegisTrace/infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./AegisTrace/infra/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports: ["127.0.0.1:9090:9090"]
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    profiles: ["observability"]
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./AegisTrace/infra/observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    profiles: ["observability"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"  # local only: published on 127.0.0.1
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me}
+    volumes:
+      - ./AegisTrace/infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./AegisTrace/infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:3002:3000"]
+    depends_on: [prometheus, tempo]
+
 volumes:
   aegismem_pg:
+  tempo_data:

@@ -21,10 +21,12 @@ import redis
 from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 
+from aegistrace import tracing
 from aegistrace.approvals import service as approvals
 from aegistrace.authorization import rules as rules_mod
 from aegistrace.evidence.bundle import write_bundle_records
@@ -134,6 +136,24 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
 def create_app(deps: Deps) -> FastAPI:
     app = FastAPI(title="AegisTrace API", version="0.1.0", docs_url="/docs", redoc_url=None)
     app.state.deps = deps
+
+    @app.middleware("http")
+    async def trace_requests(request: Request, call_next: Any) -> Response:
+        """One server span per request, named by route template (never the raw path, which holds ids)."""
+        if request.url.path in ("/healthz", "/readyz", "/metrics"):
+            response: Response = await call_next(request)
+            return response
+        attrs = {"http.request.method": request.method}
+        with tracing.span(request.method, attrs, kind=SpanKind.SERVER, parent=dict(request.headers)) as s:
+            response = await call_next(request)
+            template = getattr(request.scope.get("route"), "path", None)
+            if template:
+                s.update_name(f"{request.method} {template}")
+                s.set_attribute("http.route", template)
+            s.set_attribute("http.response.status_code", response.status_code)
+            if response.status_code >= 500:
+                tracing.fail(s, str(response.status_code))
+            return response
 
     @app.exception_handler(HTTPException)
     async def http_exc(_: Request, exc: HTTPException) -> JSONResponse:
@@ -933,6 +953,7 @@ def create_app(deps: Deps) -> FastAPI:
 def build_from_env() -> FastAPI:
     """Entry point for uvicorn: `uvicorn aegistrace.api.app:build_from_env --factory`."""
     sealing.configure_from_env()  # payload encryption at rest when AEGIS_PAYLOAD_KEK_FILE is set
+    tracing.configure("api")
     from aegistrace.evidence.signing import load_local_signer
 
     from .logging import configure

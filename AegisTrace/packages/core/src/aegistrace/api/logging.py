@@ -9,6 +9,8 @@ import logging
 import re
 from typing import Any
 
+from aegistrace.tracing import TraceContextFilter
+
 SECRET_PATTERNS = [
     re.compile(r"(?i)bearer\s+[a-z0-9._~+/=-]+"),
     re.compile(r"eyJ[a-zA-Z0-9_-]{5,}\.[a-zA-Z0-9_-]{5,}\.[a-zA-Z0-9_-]+"),  # JWT
@@ -48,6 +50,7 @@ class JsonFormatter(logging.Formatter):
 def configure(level: str = "INFO") -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
+    handler.addFilter(TraceContextFilter())  # trace_id/span_id on every record
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)

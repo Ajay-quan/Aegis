@@ -102,8 +102,8 @@ BEGIN
     SELECT array_agg(run_id) INTO ids FROM s;
     IF ids IS NOT NULL THEN
       INSERT INTO erasures (id, tenant_id, scope, run_ids, actor_id, reason)
-      VALUES ('era_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 24), t.tenant_id, 'retention', ids, 'system',
-              'retention: ' || t.days || ' days');
+      VALUES ('era_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 24), t.tenant_id, 'retention', ids,
+              'system', 'retention: ' || t.days || ' days');
       n := n + cardinality(ids);
     END IF;
   END LOOP;
@@ -116,6 +116,5 @@ GRANT EXECUTE ON FUNCTION apply_payload_retention() TO aegis_app;
 
 def downgrade() -> None:
     op.execute("DROP POLICY IF EXISTS retention_owner ON tenant_rules; DROP POLICY IF EXISTS retention_owner ON runs;")
-    op.execute(
-        "DROP FUNCTION apply_payload_retention(); DROP TABLE erasures, payload_keys; DROP FUNCTION payload_keys_guard();"
-    )
+    op.execute("DROP FUNCTION apply_payload_retention(); DROP TABLE erasures, payload_keys;")
+    op.execute("DROP FUNCTION payload_keys_guard();")

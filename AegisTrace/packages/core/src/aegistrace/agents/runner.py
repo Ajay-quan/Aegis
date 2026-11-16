@@ -15,8 +15,10 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from opentelemetry.trace import SpanKind
 from sqlalchemy import Engine, text
 
+from aegistrace import tracing
 from aegistrace.evidence.events import payload_digest
 from aegistrace.orchestration.leases import Lease, backoff, heartbeat
 from aegistrace.orchestration.service import Actor, record_event, transition
@@ -86,7 +88,22 @@ def run_agent(
         if resp is None:
             request_digest = payload_digest({"messages": messages, "tools": registry.describe()})
             try:
-                resp, latency_ms = timed(model.complete, messages, registry.describe())
+                # GenAI semantic-convention attributes; prompts and completions are never recorded on spans.
+                with tracing.span(
+                    "model.complete",
+                    {
+                        "gen_ai.system": model.provider,
+                        "gen_ai.request.model": model_id,
+                        "aegis.step": step,
+                        "aegis.run_id": lease.run_id,
+                    },
+                    kind=SpanKind.CLIENT,
+                ) as ms:
+                    try:
+                        resp, latency_ms = timed(model.complete, messages, registry.describe())
+                    except ModelError as exc:
+                        tracing.fail(ms, exc.classification)
+                        raise
             except ModelError as exc:
                 with tenant_tx(engine, tenant_id) as c:
                     record_event(

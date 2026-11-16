@@ -737,3 +737,31 @@ The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its
 - New tests: 8 privacy contract tests plus 1 Playwright test (hold, erase from the run page, evidence still intact, erasure logged).
 - Verified: `./aegis test` (pytest all pass, Playwright 9/9, extension 22/22), ruff and mypy clean. The live stack stores ciphertext (checked in Postgres).
 - Docs: `AegisTrace/docs/operations/PRIVACY.md`.
+
+## Session 21 — 2026-11-16: Remote MCP with OAuth 2.1; OpenTelemetry tracing and dashboards
+
+**Remote MCP servers** (`mcpgw/bridge.py`, `mcpgw/config.py`):
+- Streamable HTTP transport alongside stdio.
+- OAuth 2.1 client credentials through the MCP SDK's provider: RFC 9728 discovery, issuer pinning, RFC 8707 resource indicator, so tokens are bound to one server. Tokens are cached in memory per server.
+- Destination checks before every connection: HTTPS only; metadata, link-local and multicast addresses always refused; private networks only when allowed per server.
+- Admin servers file `AEGIS_MCP_SERVERS_FILE` (secrets by env-var name only), loaded by API and worker. A down server is skipped without blocking startup.
+- `aegistrace mcp discover` pins schema digests.
+- 17 tests against a real local MCP server and authorization server: end-to-end run through policy and evidence; token bound to the right resource; tokens cached; wrong secret → `invalid_client` with no token issued; foreign issuer → "issuer mismatch" with credentials never sent; the server refuses tokens issued for another server; 9 destination cases; servers file and CLI.
+
+**Tracing** (`tracing.py`):
+- One trace per run from `POST /v1/runs` through outbox and queue to `run.execute`, `model.complete`, `tool <name>` → `policy.evaluate` → `tool.execute`, `mcp.call_tool`, AegisMem calls and `evidence.checkpoint`.
+- No content on spans (a test asserts it); route-template span names; trace ids in JSON logs.
+- Off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+
+**Dashboards:**
+- `./aegis up --observability` adds Prometheus, Tempo and Grafana (:3002) with a provisioned "AegisTrace overview": 12 metric panels, each a plain question, colored by meaning, plus recent traces.
+- Verified live: all 4 scrape targets up; Tempo traces contain API and worker spans.
+
+**Bugs found:**
+1. The `aegis_runs_finished_total` metric was declared but never recorded anywhere, so it had always been empty. Now recorded on every resting state.
+2. A dashboard count showed 4.96 because of `increase()` extrapolation; it is now rounded.
+3. A browser test assumed a clean database.
+
+**Verified:**
+- `./aegis test`: pytest 204 passed, 1 skipped (the live-AegisMem contract test, which runs in the integration CI job); Playwright 9/9; extension 22/22.
+- ruff, format and mypy --strict clean; migrations round-trip.

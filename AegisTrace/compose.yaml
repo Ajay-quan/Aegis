@@ -49,6 +49,9 @@ services:
       AEGIS_OIDC_JWKS: /run/aegis/jwks.json
       AEGIS_SIGNING_KEY_FILE: /run/aegis/signing-key.pem
       AEGIS_PAYLOAD_KEK_FILE: /run/aegis/payload-kek  # payload encryption at rest (dev key; production: KMS)
+      AEGIS_API_METRICS: "1"
+      # Tracing: off unless an OTLP endpoint is set (./aegis up --observability sets it to Tempo).
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       AEGIS_DEV_ALLOW_SHARED_KEY_FILE: "1"  # local compose only; see evidence/signing.py
       AEGIS_RATE_LIMIT_PER_MINUTE: ${AEGIS_RATE_LIMIT_PER_MINUTE:-600}
       # Governed memory (AegisMem). Empty = memory.* tools not registered.

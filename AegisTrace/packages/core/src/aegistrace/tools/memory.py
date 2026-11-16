@@ -25,7 +25,10 @@ from collections.abc import Mapping
 from typing import Any, Protocol
 
 import httpx
+from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, ConfigDict, Field
+
+from aegistrace import tracing
 
 from .registry import Classification, RiskClass, ToolContext, ToolRegistry, ToolSpec
 
@@ -90,9 +93,12 @@ class HttpMemoryClient:
 
     def post(self, path: str, body: dict[str, Any], idempotency_key: str | None = None) -> Any:
         headers = {"Idempotency-Key": idempotency_key} if idempotency_key else {}
-        r = self._http.post(path, json=body, headers=headers)
-        r.raise_for_status()
-        return r.json()
+        with tracing.span(f"aegismem {path}", {"aegis.memory.op": path.strip("/")}, kind=SpanKind.CLIENT) as s:
+            headers.update(tracing.inject())  # AegisMem can join the trace
+            r = self._http.post(path, json=body, headers=headers)
+            s.set_attribute("http.response.status_code", r.status_code)
+            r.raise_for_status()
+            return r.json()
 
 
 def client_from_env(env: Mapping[str, str]) -> HttpMemoryClient | None:

@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import argparse
 import base64
-import secrets
 import json
 import os
+import secrets
 from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
