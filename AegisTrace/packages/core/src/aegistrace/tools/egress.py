@@ -4,10 +4,15 @@
 and metadata addresses blocked, every redirect hop re-validated, bounded
 time and size.
 
-Limitation: resolution happens here, then httpx resolves again when it
-connects, so a DNS-rebinding race remains possible. The authoritative egress
-boundary must be network-level (egress proxy / NetworkPolicy / security
-groups) that the worker cannot modify; this module is defence in depth.
+DNS pinning: each hop is resolved once, every address is checked, and the
+connection goes to the checked address itself (an IP-literal URL) while TLS
+still verifies the certificate against the real hostname (SNI + Host header).
+A second, different DNS answer at connect time (DNS rebinding) therefore
+cannot redirect the request to an internal address.
+
+Network-level egress control (an egress proxy, NetworkPolicy or security
+groups the worker cannot modify) remains the authoritative boundary in
+production; this module is defence in depth. See docs/security/EGRESS.md.
 """
 
 from __future__ import annotations
@@ -50,6 +55,11 @@ def _check_ip(ip: str) -> None:
 
 
 def check_url(url: str, allowed_hosts: set[str], resolver: Resolver) -> str:
+    return resolve_checked(url, allowed_hosts, resolver)[0]
+
+
+def resolve_checked(url: str, allowed_hosts: set[str], resolver: Resolver) -> tuple[str, str]:
+    """Validate the URL and its DNS answers; return (hostname, the address to connect to)."""
     parts = urlsplit(url)
     if parts.scheme != "https":
         raise EgressDenied("only https is allowed")
@@ -65,8 +75,18 @@ def check_url(url: str, allowed_hosts: set[str], resolver: Resolver) -> str:
     if not ips:
         raise EgressDenied("no addresses")
     for ip in ips:
-        _check_ip(ip)
-    return host
+        _check_ip(ip)  # every answer must be acceptable, not just the one we use
+    return host, sorted(ips)[0]
+
+
+def pinned_request(client: httpx.Client, url: str, host: str, ip: str) -> httpx.Request:
+    """A GET to `ip` (no second DNS lookup) that presents and verifies `host` over TLS."""
+    parts = urlsplit(url)
+    literal = f"[{ip}]" if ":" in ip else ip
+    netloc = literal + (f":{parts.port}" if parts.port else "")
+    target = parts._replace(netloc=netloc).geturl()
+    host_header = host + (f":{parts.port}" if parts.port else "")
+    return client.build_request("GET", target, headers={"Host": host_header}, extensions={"sni_hostname": host})
 
 
 def fetch(
@@ -78,13 +98,14 @@ def fetch(
 ) -> tuple[int, bytes]:
     client = client or httpx.Client(timeout=timeout, follow_redirects=False, verify=True)
     for _ in range(MAX_REDIRECTS + 1):
-        check_url(url, allowed_hosts, resolver)
-        with client.stream("GET", url) as resp:
+        host, ip = resolve_checked(url, allowed_hosts, resolver)
+        resp = client.send(pinned_request(client, url, host, ip), stream=True)
+        try:
             if resp.is_redirect:
                 loc = resp.headers.get("location")
                 if not loc:
                     raise EgressDenied("redirect without location")
-                url = urljoin(url, loc)
+                url = urljoin(url, loc)  # relative to the hostname URL, so the next hop is checked by name
                 continue
             body = b""
             for chunk in resp.iter_bytes():
@@ -92,4 +113,6 @@ def fetch(
                 if len(body) > MAX_RESPONSE_BYTES:
                     raise EgressDenied("response too large")
             return resp.status_code, body
+        finally:
+            resp.close()
     raise EgressDenied("too many redirects")

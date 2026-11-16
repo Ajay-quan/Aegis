@@ -765,3 +765,31 @@ The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its
 **Verified:**
 - `./aegis test`: pytest 204 passed, 1 skipped (the live-AegisMem contract test, which runs in the integration CI job); Playwright 9/9; extension 22/22.
 - ruff, format and mypy --strict clean; migrations round-trip.
+
+## Session 22 — 2026-11-16: Gap list — CI live, distributed recovery, signing service, egress pinning
+
+Responding to an external gap review. Two of its items (payload encryption and retention; remote MCP with OAuth) were already done in sessions 20–21.
+
+1. **CI is live and green on GitHub** (first real runs): Python, TypeScript, supply chain and integration all pass. Fixes along the way:
+   - a secret-scan false positive (a type name read as a key) was allowlisted precisely;
+   - the base image was bumped; the Trivy scan now shows 0 fixable HIGH/CRITICAL issues;
+   - the restore verifier wrongly failed on encrypted payloads after session 20. Fixed: it decrypts with `--kek`, or verifies digest-only.
+2. **Distributed load and recovery** (`benchmarks/distributed.py`, `docs/benchmarks/DISTRIBUTED.md`), one laptop, 40 users × 40 s per phase:
+   - 1/2/4 workers: 15.8 / 20.5 / 32.7 runs/s; p95 dropped from 4.2 s to 1.7 s.
+   - A SIGKILLed worker held 3 runs; their leases were recovered and retried.
+   - A Redis restart caused 1.7% HTTP errors; a Postgres restart, 3.4%.
+   - OPA down: 620 tool calls failed closed.
+   - Across all 7,334 runs: 0 unfinished, 0 outbox backlog, 0 sequence gaps, 0 duplicate executions, 0 executions without an allow decision, 7,334/7,334 receipts VALID.
+   - The rate limit was raised for the test (the default throttles 50 ms polling).
+3. **Signing keys out of the app:**
+   - `aegistrace-signer` service, with no network and a Unix socket only, signs checkpoint bodies only.
+   - Key ring with rotation (5-minute grace) and trust-store export; `./aegis rotate-keys`.
+   - The API and workers now mount no private keys; the dev IdP key moved to its own mount.
+   - Live rotation verified: 7,571/7,571 finished runs VALID across both keys.
+   - The tests caught a real bug: the service's request model was defined inside a function, so every sign request returned 422.
+4. **Egress:** each hop is resolved once and every answer checked; the connection goes to the checked IP with SNI/Host set to the hostname, closing the DNS-rebinding race in `http.fetch`. Tested with real TLS (right name passes, wrong name refused). Remaining: the same window in remote MCP, and network-level control in production.
+5. **Dashboard:** live polling could let an older response overwrite a newer one. Fixed with request sequencing. A flaky privacy test was traced to a text matcher catching the toast too, plus a project-name collision; it now passes 15/15 in sequence.
+
+Verified: pytest 218 passed, 1 skipped; Playwright 9/9; extension 22/22; ruff, format and mypy clean.
+
+Still open, and not doable from this laptop: an independent security review; an HSM/KMS signing backend (needs a provider account); microVM sandbox testing (needs Linux with KVM); multi-host and failover tests; the MCP conformance suite.

@@ -20,7 +20,7 @@
 14. ~~Interactive OIDC login~~ Done: authorization code + PKCE against any OIDC provider (docs/operations/SSO.md); dev provider for local use; token paste can be disabled.
 
 ## Hardening
-15. DNS-rebinding TOCTOU in `egress.py`. Production needs an egress proxy that pins resolved IPs.
+15. ~~DNS-rebinding TOCTOU in `egress.py`~~ Fixed: connections pin the checked IP with SNI hostname verification (docs/security/EGRESS.md). Remaining: the same window in remote MCP (SDK resolves again); production still needs network-level egress control.
 16. Anchoring failures are counted and alerted (`aegis_anchor_failures_total`), but do not block new work.
 17. The rate limiter fails open when Redis is down (documented choice; revisit).
 18. ~~Reconciliation UI~~ Done (run page actions).
