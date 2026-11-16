@@ -703,3 +703,15 @@ The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its
 **Website** (`AegisMem/site`): rewritten for Aegis (AegisTrace + AegisMem + Recall). Removed a non-working email address and a "request access" form that didn't submit anywhere. Says plainly that it is pre-release.
 
 **Gotcha:** in this iCloud-synced folder, the `.venv` editable-install `.pth` files can get hidden, so `uv run aegistrace` fails with ModuleNotFoundError. `uv sync` fixes it. AegisTrace's original used `.venv.nosync` for this reason.
+
+## Session 18 — 2026-11-16: Integration completed (memory review, one-command stack)
+
+- **See what's stored.** `GET /v1/memory/{subject}` (needs the `payloads:read` scope; memory text is payload data) lists active and quarantined memories, each with the run that wrote it. Dashboard Memory page: click a subject to see its memories, with a "from run_…" link to the signed run. Quarantined writes are shown, labeled.
+- **One command.** Root `compose.yaml` includes AegisTrace's compose and adds AegisMem (Postgres + pgvector, migrations, internal-only, auth off) plus a containerized dashboard. Launcher `./aegis up | demo | token | open | test | down`.
+- Real bugs found while wiring it:
+  1. iCloud's "name 2.py" duplicates were copied into images, so AegisMem ran duplicate Alembic revisions ("multiple heads"). Now excluded in both `.dockerignore` files.
+  2. AegisMem in development mode wrote its control DB to a read-only path; it now uses Postgres via CONTROL_DATABASE_URL.
+  3. A fresh database had no demo tenant because bootstrap was skipped when tokens existed. Bootstrap is idempotent, so `up` always runs it.
+  4. iCloud kept hiding or duplicating the venv's `.pth` files, so imports failed. The env now lives in `.venv.nosync` with a `.venv` symlink; the launcher sets this up.
+- Verified on the combined stack: AegisTrace pytest all pass; dashboard Playwright 5/5; extension 22/22; live contract test incl. browse. mypy --strict is now fully clean (56 files).
+- Push to GitHub was blocked by the session's permission check; commits are local, awaiting the owner's go-ahead.
