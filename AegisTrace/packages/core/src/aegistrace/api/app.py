@@ -882,7 +882,8 @@ def create_app(deps: Deps) -> FastAPI:
             rows = (
                 c.execute(
                     text(
-                        "SELECT CAST(resource AS jsonb)->>'subject' s, count(*) n, max(created_at) last FROM policy_decisions "
+                        "SELECT CAST(resource AS jsonb)->>'subject' s, count(*) n, max(created_at) last "
+                        "FROM policy_decisions "
                         "WHERE starts_with(tool, 'memory.') AND CAST(resource AS jsonb) ? 'subject' "
                         "GROUP BY 1 ORDER BY 3 DESC LIMIT 200"
                     )
