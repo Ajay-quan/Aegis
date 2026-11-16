@@ -132,7 +132,7 @@ test("memory page: clicking a subject shows what is stored and which run wrote i
   await login(page);
   await page.goto("/memory");
   await page.getByRole("button", { name: subject }).first().click();
-  await expect(page.getByText(`Stored about ${subject}`)).toBeVisible();
+  await expect(page.getByText(new RegExp(`^Memory about ${subject}$`))).toBeVisible();
   await expect(page.getByText("Prefers invoices in EUR")).toBeVisible();
   await page.getByRole("link", { name: /^from run_/ }).first().click();
   await expect(page).toHaveURL(new RegExp(`/runs/${id}`));
@@ -272,4 +272,41 @@ test("members: add a person, change their role, remove them", async ({ page }) =
   await expect(page.locator("tr", { hasText: who })).toHaveCount(0);
   await page.goto("/settings/audit");
   await expect(page.locator("tr", { hasText: who }).first()).toBeVisible();
+});
+
+test("memory explorer: find what an agent remembered, search it, correct it, erase it", async ({ page }) => {
+  const r = await fetch(`${process.env.AEGIS_API_URL ?? "http://127.0.0.1:8000"}/v1/tools`, { headers: { Authorization: `Bearer ${token}` } });
+  test.skip(!((await r.json()).items as { name: string }[]).some((t) => t.name === "memory.remember"), "stack started without AEGIS_MEMORY_URL");
+  const subject = `pwx${Date.now()}`;
+  const project = await api.createProject(`pw-mx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+  const agent = await api.registerAgent(project.id, "pw-mx-agent");
+  await api.grantTool(agent.id, "memory.remember", 2);
+  const { id } = await api.submitRun(agent.id, { task: "pw", mock_script: [
+    { tool: "memory.remember", args: { subject, text: "Prefers invoices in USD" } }, { final: "ok" },
+  ] });
+  expect((await api.waitForRun(id, 30_000)).state).toBe("SUCCEEDED");
+
+  await login(page);
+  await page.goto("/memory");
+  await page.getByRole("button", { name: subject }).first().click();
+  await expect(page.getByText("Prefers invoices in USD")).toBeVisible();
+  await expect(page.getByText("version 1").first()).toBeVisible();
+
+  await page.getByRole("tab", { name: "Search" }).click();
+  await page.locator("#memory-query").fill("invoice currency");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.locator("ol li", { hasText: "Prefers invoices in USD" })).toBeVisible();
+
+  await page.getByRole("tab", { name: "Correct" }).click();
+  await page.locator("#memory-correction").fill("Prefers invoices in EUR");
+  await page.getByRole("button", { name: "Save correction" }).click();
+  await expect(page.getByText(/Saved\. It supersedes/)).toBeVisible();
+
+  await page.getByRole("tab", { name: "Memories" }).click();
+  const original = page.locator("li", { hasText: "Prefers invoices in USD" });
+  await original.getByRole("checkbox").check();
+  await page.locator("#forget-reason").fill("customer request");
+  await page.getByRole("button", { name: "Erase", exact: true }).click();
+  await expect(page.getByText(/signed receipt/)).toBeVisible();
+  await expect(page.locator("li", { hasText: "Prefers invoices in USD" })).toHaveCount(0);
 });

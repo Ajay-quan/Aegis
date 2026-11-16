@@ -58,6 +58,7 @@ services:
       AEGIS_RATE_LIMIT_PER_MINUTE: ${AEGIS_RATE_LIMIT_PER_MINUTE:-600}
       # Governed memory (AegisMem). Empty = memory.* tools not registered.
       AEGIS_MEMORY_URL: ${AEGIS_MEMORY_URL:-}
+      AEGIS_MEMORY_API_KEY_FILE: ${AEGIS_MEMORY_API_KEY_FILE:-}
       AEGIS_MEMORY_API_KEY: ${AEGIS_MEMORY_API_KEY:-}
     volumes: ["./.dev/secrets:/run/aegis:ro", "signer_sock:/run/aegis-signer"]
     ports: ["127.0.0.1:8000:8000"]

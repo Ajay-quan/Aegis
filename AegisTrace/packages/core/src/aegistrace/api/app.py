@@ -109,6 +109,24 @@ class MemberIn(Strict):
     role: str = Field(pattern="^(owner|admin|developer|viewer)$")
 
 
+class MemSearchIn(Strict):
+    query: str = Field(min_length=1, max_length=1000)
+    top_k: int = Field(default=20, ge=1, le=50)
+
+
+class MemReviewIn(Strict):
+    release: bool
+
+
+class MemCorrectIn(Strict):
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class MemForgetIn(Strict):
+    memory_ids: list[str] = Field(min_length=1, max_length=100)
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class DecisionIn(Strict):
     approve: bool
 
@@ -834,6 +852,110 @@ def create_app(deps: Deps) -> FastAPI:
         except httpx.HTTPError as e:
             raise HTTPException(502, "memory service unavailable") from e
         return {"subject": subject, "items": items}
+
+    # -- Memory Explorer (AegisMem through the server; the browser never reaches AegisMem) ----------
+
+    SUBJECT = r"^[a-z0-9_.-]{1,64}$"
+
+    def _mem() -> Any:
+        if deps.memory is None:
+            raise HTTPException(404, "memory is not configured")
+        return deps.memory
+
+    def _mem_call(fn: Any, *a: Any) -> Any:
+        from aegistrace.tools import memory as mem_tools
+
+        try:
+            return getattr(mem_tools, fn)(_mem(), *a)
+        except LookupError as exc:
+            raise HTTPException(404, "memory not found for this subject") from exc
+        except httpx.HTTPStatusError as exc:
+            code = exc.response.status_code
+            raise HTTPException(409 if code == 409 else 502, "the memory service refused the request") from exc
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, "memory service unavailable") from exc
+
+    @app.get("/v1/memory-subjects")
+    def memory_subjects(p: Principal = scoped("runs:read")) -> dict[str, Any]:
+        """Subjects agents have remembered things about (from the governed memory tools' decisions)."""
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            rows = (
+                c.execute(
+                    text(
+                        "SELECT CAST(resource AS jsonb)->>'subject' s, count(*) n, max(created_at) last FROM policy_decisions "
+                        "WHERE starts_with(tool, 'memory.') AND CAST(resource AS jsonb) ? 'subject' "
+                        "GROUP BY 1 ORDER BY 3 DESC LIMIT 200"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        return {"items": [{"subject": r["s"], "accesses": r["n"], "last_access": r["last"]} for r in rows]}
+
+    @app.post("/v1/memory/{subject}/search")
+    def memory_search(
+        body: MemSearchIn, subject: str = Path(pattern=SUBJECT), p: Principal = scoped("payloads:read")
+    ) -> dict[str, Any]:
+        return {"items": _mem_call("explorer_search", p.tenant_id, subject, body.query, body.top_k)}
+
+    @app.get("/v1/memory/{subject}/contradictions")
+    def memory_contradictions(
+        subject: str = Path(pattern=SUBJECT), p: Principal = scoped("payloads:read")
+    ) -> dict[str, Any]:
+        return {"items": _mem_call("explorer_contradictions", p.tenant_id, subject)}
+
+    @app.post("/v1/memory/{subject}/review/{memory_id}")
+    def memory_review(
+        body: MemReviewIn,
+        memory_id: str,
+        subject: str = Path(pattern=SUBJECT),
+        p: Principal = scoped("approvals:decide"),
+    ) -> dict[str, Any]:
+        """Release a quarantined memory (it becomes recallable) or reject it."""
+        out = _mem_call("explorer_review", p.tenant_id, subject, memory_id, body.release)
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            audit(
+                c,
+                p.tenant_id,
+                p.subject,
+                "memory." + ("released" if body.release else "rejected"),
+                f"{subject}/{memory_id}",
+                {},
+            )
+        return {"memory_id": memory_id, "released": body.release, "result": out}
+
+    @app.post("/v1/memory/{subject}/corrections")
+    def memory_correct(
+        body: MemCorrectIn, subject: str = Path(pattern=SUBJECT), p: Principal = scoped("agents:write")
+    ) -> dict[str, Any]:
+        out = _mem_call("explorer_correct", p.tenant_id, subject, body.text, p.subject)
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            audit(
+                c,
+                p.tenant_id,
+                p.subject,
+                "memory.corrected",
+                f"{subject}/{out.get('memory_id')}",
+                {"action": out.get("action"), "previous_memory_id": out.get("previous_memory_id")},
+            )
+        return dict(out)
+
+    @app.post("/v1/memory/{subject}/forget")
+    def memory_forget(
+        body: MemForgetIn, subject: str = Path(pattern=SUBJECT), p: Principal = scoped("data:erase")
+    ) -> dict[str, Any]:
+        """Erase memories; returns AegisMem's signed erasure receipt."""
+        out = _mem_call("explorer_forget", p.tenant_id, subject, body.memory_ids, body.reason)
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            audit(
+                c,
+                p.tenant_id,
+                p.subject,
+                "memory.erased",
+                subject,
+                {"memory_ids": body.memory_ids, "reason": body.reason, "receipt_id": out["body"]["receipt_id"]},
+            )
+        return dict(out)
 
     @app.get("/v1/policy-decisions")
     def policy_decisions(

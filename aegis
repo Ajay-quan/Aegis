@@ -38,6 +38,14 @@ case "${1:-help}" in
     fi
     bootstrap
     docker compose up -d --build --wait
+    # AegisTrace's service key for AegisMem (created once; AegisMem stores only its hash).
+    if [ ! -s "$T/.dev/secrets/aegismem-key" ]; then
+      docker compose exec -T aegismem python scripts/aegisctl.py create-key --tenant aegistrace \
+        --name aegistrace-service --scopes memory:read memory:write review privacy \
+        | sed -n 's/^api_key: //p' > "$T/.dev/secrets/aegismem-key"
+      chmod 644 "$T/.dev/secrets/aegismem-key"  # read by the API and worker containers (dev only)
+      docker compose up -d --wait --force-recreate api worker >/dev/null
+    fi
     echo; echo "Aegis is running."
     echo "  Dashboard  http://localhost:3000   (click Sign in; dev users: admin, auditor)"
     echo "  API        http://localhost:8000/docs"

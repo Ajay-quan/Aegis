@@ -42,7 +42,8 @@ services:
     environment:
       APP_ENV: development
       CONTROL_DATABASE_URL: postgresql+asyncpg://aegis_app:dev-aegismem-app@aegismem-postgres:5432/aegismem  # receipts, keys, ledger
-      AUTH_ENABLED: "false"  # reachable only on the compose network (no published port)
+      AUTH_ENABLED: "true"  # AegisTrace calls it with its own scoped aem_ service key
+      API_KEY_PEPPER: ${AEGISMEM_KEY_PEPPER:-dev-aegismem-pepper}  # dev default; set a secret in production
       POSTGRES_HOST: aegismem-postgres
       POSTGRES_DB: aegismem
       POSTGRES_USER: aegis_app
