@@ -679,3 +679,9 @@ The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its
 - Not done: renaming the GitHub repo and the local folder (needs the owner's approval). The roughly 222 untracked "* 2.*" files are iCloud duplicates; left untouched, delete manually.
 - Follow-up: top-level folders renamed to `AegisMem/` and `AegisTrace/` so the GitHub repo `Aegis` holds both by name.
 - Pushed to github.com/Ajay-quan/Aegis `main` (fast-forward 3232415 → 735e690; the Aegis repo is the renamed AegisMem repo). The CI result on GitHub hasn't been checked yet.
+
+## Session 16 — 2026-11-16: AegisTrace brought into the monorepo
+
+- Copied from ~/Desktop/AegisTrace (it wasn't a git repo, so there was no history to keep) into `AegisTrace/`: 210 files, 1.7 MB. Left out: virtualenvs, caches, build output and `.dev/` (dev signing keys and tokens). Secret scan: clean.
+- Verified against the copied code: 82 unit/property/security tests pass. Dashboard (Next.js) builds after building `packages/sdk-typescript`. Integration and end-to-end tests need Docker (Postgres, Redis, OPA) and weren't run.
+- The original on the Desktop is untouched.
