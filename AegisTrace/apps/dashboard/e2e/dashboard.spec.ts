@@ -89,3 +89,26 @@ test("organization rules: change, see the effect, save, and view the report", as
   const save = page.getByRole("button", { name: "Save rules" });
   if (await save.isVisible()) await save.click();
 });
+
+test("memory page shows governed AegisMem activity, including blocked access", async ({ page }) => {
+  const r = await fetch(`${process.env.AEGIS_API_URL ?? "http://127.0.0.1:8000"}/v1/tools`, { headers: { Authorization: `Bearer ${token}` } });
+  const tools = ((await r.json()).items as { name: string }[]).map((t) => t.name);
+  test.skip(!tools.includes("memory.recall"), "stack started without AEGIS_MEMORY_URL");
+  const project = await api.createProject(`pw-mem-${Date.now()}`);
+  const agent = await api.registerAgent(project.id, "pw-mem-agent");
+  await api.grantTool(agent.id, "memory.remember", 2);
+  const subject = `pw${Date.now()}`;
+  const { id } = await api.submitRun(agent.id, { task: "pw", mock_script: [
+    { tool: "memory.remember", args: { subject, text: "Playwright prefers dark mode" } },
+    { tool: "memory.recall", args: { subject, query: "dark mode" } },  // no grant: denied
+    { final: "ok" },
+  ] });
+  expect((await api.waitForRun(id, 30_000)).state).toBe("SUCCEEDED");
+
+  await login(page);
+  await page.getByRole("link", { name: "Memory" }).first().click();
+  await expect(page.getByRole("heading", { name: "Memory" })).toBeVisible();
+  const rows = page.locator("tr", { hasText: subject });
+  await expect(rows.filter({ hasText: "Remembered" })).toHaveCount(1);
+  await expect(rows.filter({ hasText: "Recalled" }).filter({ hasText: "no matching grant" })).toHaveCount(1);
+});

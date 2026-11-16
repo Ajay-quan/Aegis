@@ -711,6 +711,7 @@ def create_app(deps: Deps) -> FastAPI:
     def policy_decisions(
         p: Principal = scoped("audit:read"),
         decision: str | None = Query(None, pattern="^(allow|deny|require_approval)$"),
+        tool_prefix: str | None = Query(None, pattern=r"^[a-z]{1,32}\.$"),
         limit: int = Query(100, ge=1, le=500),
     ) -> dict[str, Any]:
         with tenant_tx(deps.engine, p.tenant_id) as c:
@@ -719,9 +720,10 @@ def create_app(deps: Deps) -> FastAPI:
                     text(
                         "SELECT decision_id, run_id, principal, tool, resource, policy_revision, decision, reason, "
                         "input_digest, created_at FROM policy_decisions WHERE (CAST(:d AS text) IS NULL OR decision = "
-                        "CAST(:d AS text)) ORDER BY created_at DESC LIMIT :n"
+                        "CAST(:d AS text)) AND (CAST(:tp AS text) IS NULL OR starts_with(tool, CAST(:tp AS text))) "
+                        "ORDER BY created_at DESC LIMIT :n"
                     ),
-                    {"d": decision, "n": limit},
+                    {"d": decision, "tp": tool_prefix, "n": limit},
                 )
                 .mappings()
                 .all()
@@ -828,6 +830,9 @@ def build_from_env() -> FastAPI:
     from aegistrace.authorization.policy import OpaPolicyEngine
     from aegistrace.tools.demo import DemoSink, build_registry
     from aegistrace.tools.gateway import ToolGateway
+    from aegistrace.tools.memory import client_from_env
 
-    deps.gateway = ToolGateway(deps.engine, build_registry(DemoSink()), OpaPolicyEngine(s.opa_url))
+    deps.gateway = ToolGateway(
+        deps.engine, build_registry(DemoSink(), memory=client_from_env(os.environ)), OpaPolicyEngine(s.opa_url)
+    )
     return create_app(deps)

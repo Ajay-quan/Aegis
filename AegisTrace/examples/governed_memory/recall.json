@@ -1,0 +1,8 @@
+{
+  "task": "Prepare this month's Acme invoice",
+  "mock_script": [
+    {"tool": "memory.recall", "args": {"subject": "acme", "query": "Acme invoice currency and date"}},
+    {"tool": "memory.recall", "args": {"subject": "globex", "query": "Globex contract terms"}},
+    {"final": "Invoice in EUR, due on the 1st."}
+  ]
+}

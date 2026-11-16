@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import egress
+from .memory import MemoryClient, register_memory_tools
 from .registry import Classification, RiskClass, ToolContext, ToolRegistry, ToolSpec
 
 
@@ -106,9 +107,11 @@ def build_registry(
     resolver: egress.Resolver = egress.system_resolver,
     fetch_hosts: set[str] | None = None,
     sandbox: Any = None,
+    memory: MemoryClient | None = None,
 ) -> ToolRegistry:
     """sandbox: a DockerSandbox; `code.run` is only registered when one is supplied
-    (i.e. on a dedicated sandbox host)."""
+    (i.e. on a dedicated sandbox host). memory: an AegisMem client; the
+    `memory.*` tools are only registered when one is supplied."""
     reg = ToolRegistry()
 
     def calc(ctx: ToolContext, a: CalcArgs) -> CalcOut:
@@ -221,4 +224,6 @@ def build_registry(
                 output_classification=Classification.CONFIDENTIAL,
             )
         )
+    if memory is not None:
+        register_memory_tools(reg, memory)
     return reg

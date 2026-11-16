@@ -1,0 +1,7 @@
+{
+  "task": "Acme asked us to delete their data",
+  "mock_script": [
+    {"tool": "memory.forget", "args": {"subject": "acme", "memory_ids": ["MEMORY_ID"], "reason": "customer erasure request"}},
+    {"final": "Erasure requested."}
+  ]
+}

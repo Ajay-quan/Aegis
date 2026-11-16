@@ -20,6 +20,7 @@ from aegistrace.observability import OUTBOX_LAG, QUEUE_DEPTH
 from aegistrace.persistence.db import make_engine
 from aegistrace.tools.demo import DemoSink, build_registry
 from aegistrace.tools.gateway import ToolGateway
+from aegistrace.tools.memory import client_from_env
 
 from .dispatcher import STREAM, dispatch_lag_seconds, dispatch_once
 from .worker import GROUP, Worker
@@ -52,7 +53,7 @@ def worker_main() -> None:
     engine = make_engine(os.environ["AEGIS_DATABASE_URL"])
     r = redis.Redis.from_url(os.environ["AEGIS_REDIS_URL"], decode_responses=True)
     hosts = {h for h in os.environ.get("AEGIS_FETCH_ALLOWED_HOSTS", "").split(",") if h}
-    registry = build_registry(DemoSink(), fetch_hosts=hosts)
+    registry = build_registry(DemoSink(), fetch_hosts=hosts, memory=client_from_env(os.environ))
     gateway = ToolGateway(engine, registry, OpaPolicyEngine(os.environ["AEGIS_OPA_URL"]))
     from aegistrace.evidence.anchor import FileAnchor
     from aegistrace.evidence.signing import load_local_signer

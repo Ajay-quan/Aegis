@@ -17,12 +17,13 @@ export const I = {
   security: "M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z",
   operations: "M22 12h-4l-3 9L9 3l-3 9H2",
   insights: "M3 3v18h18M7 15l4-4 3 3 5-6",
+  memory: "M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zm0 0v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
   rules: "M4 6h10M4 12h16M4 18h7M17 4v4M20 16v4M14 18h7",
 };
 
 const NAV: [string, string, keyof typeof I][] = [
   ["/", "Overview", "overview"], ["/insights", "Insights", "insights"], ["/runs", "Runs", "runs"],
-  ["/approvals", "Approvals", "approvals"], ["/agents", "Agents & permissions", "agents"], ["/rules", "Rules", "rules"], ["/security", "Security", "security"], ["/operations", "System health", "operations"],
+  ["/approvals", "Approvals", "approvals"], ["/agents", "Agents & permissions", "agents"], ["/rules", "Rules", "rules"], ["/memory", "Memory", "memory"], ["/security", "Security", "security"], ["/operations", "System health", "operations"],
 ];
 
 export function Icon({ d }: { d: string }) {
