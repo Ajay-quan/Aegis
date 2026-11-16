@@ -198,3 +198,17 @@ test("privacy: erase a finished run's content from its page; the erasure is logg
   await page.goto("/security");
   await expect(page.locator("tr", { hasText: reason })).toHaveCount(1);
 });
+
+test("visitors see the harness introduction first, with sign-in at the top right", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/welcome$/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Agents that act.");
+  for (const p of ["Identity", "Permission", "Approval", "Memory", "Evidence", "Privacy", "Isolation", "Insight"]) {
+    await expect(page.locator(`#pillar-${p.toLowerCase()}`)).toHaveCount(1);
+  }
+  const signIn = page.getByRole("banner").getByRole("link", { name: "Sign in" });
+  const box = await signIn.boundingBox();
+  expect(box && box.x > (page.viewportSize()?.width ?? 0) / 2).toBe(true);  // right-hand side of the top bar
+  await signIn.click();
+  await expect(page).toHaveURL(/\/login$/);
+});

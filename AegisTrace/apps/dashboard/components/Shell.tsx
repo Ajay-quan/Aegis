@@ -35,8 +35,9 @@ export function Icon({ d }: { d: string }) {
 
 export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
-  const { data } = useLive<{ pending_approvals: number }>(path === "/login" ? null : "v1/stats", 5000);
-  if (path === "/login") return <>{children}<Toaster /></>;
+  const bare = path === "/login" || path === "/welcome";  // public pages: no app chrome, no API polling
+  const { data } = useLive<{ pending_approvals: number }>(bare ? null : "v1/stats", 5000);
+  if (bare) return <>{children}<Toaster /></>;
   const pending = data?.pending_approvals ?? 0;
   return (
     <div className="flex min-h-screen">

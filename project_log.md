@@ -793,3 +793,16 @@ Responding to an external gap review. Two of its items (payload encryption and r
 Verified: pytest 218 passed, 1 skipped; Playwright 9/9; extension 22/22; ruff, format and mypy clean.
 
 Still open, and not doable from this laptop: an independent security review; an HSM/KMS signing backend (needs a provider account); microVM sandbox testing (needs Linux with KVM); multi-host and failover tests; the MCP conformance suite.
+
+## Session 23 — 2026-11-16: Public homepage explaining the Aegis harness
+
+- Signed-out visitors to `/` now see `/welcome` (`proxy.ts`), the introduction to the Aegis harness:
+  - Sign in at the top right, and again in the hero and closing sections.
+  - A hero with a live sequence of an agent action passing through the harness (requested → checked → decided → signed).
+  - A scroll-lit statement of what a harness is, and the four-step flow.
+  - The **eight pillars** (Identity, Permission, Approval, Memory, Evidence, Privacy, Isolation, Insight), each with a sticky index and an honest Built / In progress / Planned status per item.
+  - Measured proof numbers, plus a pre-release note.
+  - No icons or emoji. Dashboard palette and type; respects reduced motion; no horizontal scroll at 390, 1024 or 1440 px.
+- Bug found by the browser tests: the new redirect broke SSO. The session cookie is SameSite=Strict, so it is omitted on the last hop of a redirect chain that began at the identity provider. The callback now lands on a same-site page that refreshes to the dashboard; the cookie stays Strict.
+- Redirects use `nextUrl`, so the browser's own host is kept (localhost vs 127.0.0.1).
+- Verified: Playwright 10/10 (new homepage test included), extension 22/22, AegisTrace pytest all pass.

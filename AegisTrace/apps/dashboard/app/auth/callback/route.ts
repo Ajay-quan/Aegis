@@ -45,7 +45,14 @@ export async function GET(req: Request) {
   }
   if (!token) return fail(req, "exchange_failed");
   if (!(await startSession(token))) return fail(req, "1");
-  const res = NextResponse.redirect(appUrl("/"), 303);
+  // The session cookie is SameSite=Strict, so a browser omits it on any request that is still part of
+  // the redirect chain that began at the identity provider. Land on a page of our own first; its
+  // refresh to the dashboard is a same-site navigation that carries the cookie.
+  const res = new NextResponse(
+    `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${appUrl("/").pathname}">` +
+      `<title>Signing in</title><p style="font:14px system-ui;color:#a4a8af;background:#060708">Signing in</p>`,
+    { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
+  );
   res.cookies.set(FLOW_COOKIE, "", { path: "/auth", maxAge: 0 });
   return res;
 }
