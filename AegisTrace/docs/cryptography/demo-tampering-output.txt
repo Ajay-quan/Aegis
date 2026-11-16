@@ -1,0 +1,30 @@
+
+$ aegistrace-verify valid.zip
+VALID  (5 events, trusted through #5)
+
+$ aegistrace-verify tampered-event.zip
+PAYLOAD_MISMATCH  (5 events, trusted through #1)
+  PAYLOAD_MISMATCH [seq 2]: payload does not match digest
+
+$ aegistrace-verify deleted-event.zip
+MISSING_EVENT  (4 events, trusted through #0)
+  MISSING_EVENT [seq 4]: expected sequence 3, found 4
+  BROKEN_CHAIN [seq 4]: previous_event_hash does not link
+  MISSING_EVENT [seq 5]: expected sequence 4, found 5
+  MISSING_EVENT [seq 5]: trusted checkpoint covers 5 events, bundle has 4
+
+$ aegistrace-verify reordered-events.zip
+BROKEN_SEQUENCE  (5 events, trusted through #1)
+  BROKEN_SEQUENCE [seq 3]: expected sequence 2, found 3
+  BROKEN_CHAIN [seq 3]: previous_event_hash does not link
+  BROKEN_SEQUENCE [seq 2]: expected sequence 3, found 2
+  BROKEN_CHAIN [seq 2]: previous_event_hash does not link
+  BROKEN_CHAIN [seq 4]: previous_event_hash does not link
+
+$ aegistrace-verify modified-artifact.zip
+ARTIFACT_CORRUPTED  (5 events, trusted through #5)
+  ARTIFACT_CORRUPTED: artifact a0e92363f498d55e… content mismatch
+
+$ aegistrace-verify invalid-signature.zip
+INVALID_SIGNATURE  (5 events, trusted through #0)
+  INVALID_SIGNATURE: bad signature by ed25519:b9533c7aff0ad7b155b9553a43efc285

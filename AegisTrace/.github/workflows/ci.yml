@@ -1,0 +1,95 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# TODO(supply-chain): pin third-party actions to full commit SHAs (resolve and
+# review them; do not copy SHAs from untrusted sources). Tracked in OPEN_ISSUES.
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env: {POSTGRES_USER: aegis_owner, POSTGRES_PASSWORD: ci-owner-password, POSTGRES_DB: aegistrace_test}
+        ports: ["55432:5432"]
+        options: --health-cmd "pg_isready -U aegis_owner" --health-interval 2s --health-retries 30
+      redis:
+        image: redis:7.4-alpine
+        ports: ["56379:6379"]
+    env:
+      AEGIS_OWNER_DATABASE_URL: postgresql+psycopg://aegis_owner:ci-owner-password@127.0.0.1:55432/aegistrace_test
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "0.9.5"}
+      - run: uv sync --frozen
+      - name: Lint and type-check
+        run: uv run ruff check . && uv run ruff format --check . && uv run mypy
+      - name: Policy tests
+        run: docker run --rm -v "$PWD/policies:/policies:ro" openpolicyagent/opa:1.4.2 test /policies -v
+      - name: Database roles and migrations
+        run: |
+          PGPASSWORD=ci-owner-password psql -h 127.0.0.1 -p 55432 -U aegis_owner -d aegistrace_test -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE aegis_app LOGIN PASSWORD 'dev-app-password' NOSUPERUSER NOBYPASSRLS" \
+            -c "CREATE ROLE aegis_dispatcher LOGIN PASSWORD 'dev-dispatcher-password' NOSUPERUSER NOBYPASSRLS"
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+      - name: Start OPA with repository policies
+        run: |
+          docker run -d --name opa-ci -p 58181:8181 -v "$PWD/policies:/policies:ro" openpolicyagent/opa:1.4.2 \
+            run --server --addr=0.0.0.0:8181 /policies
+          for i in $(seq 1 30); do curl -sf localhost:58181/health && break; sleep 1; done
+      - name: Tests (unit, property, fuzz, security, integration, e2e, contract, failure-injection)
+        env:
+          AEGIS_OWNER_DATABASE_URL: postgresql+psycopg://aegis_owner:ci-owner-password@127.0.0.1:55432/aegistrace_test
+        run: uv run pytest -q
+      - name: Dependency audit
+        run: uv run --with pip-audit==2.9.0 pip-audit -l --skip-editable
+
+  typescript:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v5
+        with: {node-version: "22.20.0"}
+      - run: npm ci && npm test && npm audit --omit=dev
+        working-directory: packages/sdk-typescript
+      - run: npm ci && npx tsc --noEmit && npx next build && npm audit --omit=dev
+        working-directory: apps/dashboard
+
+  supply-chain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false, fetch-depth: 0}
+      - name: Secret scan
+        run: docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.28.0 git /repo --no-banner --redact --config /repo/.gitleaks.toml
+      - name: Build image
+        run: docker build -f infra/docker/Dockerfile -t aegistrace:ci .
+      - name: Image vulnerability scan (fail on fixable HIGH/CRITICAL)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.67.2 image \
+            --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed aegistrace:ci
+      - name: SBOM (CycloneDX)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock anchore/syft:v1.33.0 \
+            aegistrace:ci -o cyclonedx-json > sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with: {name: sbom, path: sbom.cdx.json}

@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: aegistrace-opa, namespace: aegistrace, labels: {app: aegistrace-opa}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: aegistrace-opa}}
+  template:
+    metadata: {labels: {app: aegistrace-opa}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: opa
+          image: openpolicyagent/opa:1.4.2
+          args: [run, --server, --addr=0.0.0.0:8181, /policies]
+          ports: [{containerPort: 8181}]
+          volumeMounts: [{name: policies, mountPath: /policies, readOnly: true}]
+          readinessProbe: {httpGet: {path: /health, port: 8181}}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      volumes:
+        - name: policies
+          configMap: {name: aegistrace-policies}  # built from ./policies by the release pipeline
+---
+apiVersion: v1
+kind: Service
+metadata: {name: aegistrace-opa, namespace: aegistrace}
+spec:
+  selector: {app: aegistrace-opa}
+  ports: [{port: 8181, targetPort: 8181}]

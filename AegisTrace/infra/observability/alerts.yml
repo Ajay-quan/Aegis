@@ -1,0 +1,42 @@
+# Prometheus alerting rules for AegisTrace. Validated with `promtool check rules`.
+groups:
+  - name: aegistrace
+    rules:
+      - alert: PolicyEngineUnavailable
+        expr: increase(aegis_tool_decisions_total{reason=~"policy_engine_unavailable|policy_engine_error|policy_result_malformed"}[5m]) > 0
+        labels: {severity: page}
+        annotations:
+          summary: Tool calls are being denied because OPA is unreachable or erroring (fail-closed).
+      - alert: OutboxLagHigh
+        expr: max(aegis_outbox_lag_seconds) > 60
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: Oldest undispatched outbox message is older than 60s; runs are not being scheduled.
+      - alert: OutboxPublishFailures
+        expr: increase(aegis_outbox_publish_failures_total[10m]) > 10
+        labels: {severity: ticket}
+        annotations:
+          summary: Dispatcher cannot publish to Redis Streams.
+      - alert: QueueBacklog
+        expr: max(aegis_queue_pending_messages) > 1000
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: Run queue backlog; scale workers.
+      - alert: CheckpointAnchoringFailing
+        expr: increase(aegis_anchor_failures_total[15m]) > 0
+        labels: {severity: page}
+        annotations:
+          summary: Signed checkpoints are not reaching the external anchor; tail-truncation protection is degraded.
+      - alert: RunsNeedReconciliation
+        expr: increase(aegis_recoveries_total{state="NEEDS_RECONCILIATION"}[1h]) > 0
+        labels: {severity: ticket}
+        annotations:
+          summary: A run has an irreversible tool call with unknown outcome; a human must reconcile it.
+      - alert: PolicyEvalSlow
+        expr: histogram_quantile(0.95, sum(rate(aegis_policy_eval_seconds_bucket[5m])) by (le)) > 0.02
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: p95 policy evaluation above the 20ms objective.

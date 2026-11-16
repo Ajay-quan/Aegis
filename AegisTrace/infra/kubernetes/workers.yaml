@@ -1,0 +1,78 @@
+# Workers and dispatcher. Workers run model calls and built-in tools; they do
+# NOT run untrusted code (no docker socket, no privileged mode). Untrusted
+# code goes to dedicated sandbox hosts (docs/security/SANDBOX.md).
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: aegistrace-worker, namespace: aegistrace}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: aegistrace-worker, namespace: aegistrace, labels: {app: aegistrace-worker}}
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: aegistrace-worker}}
+  template:
+    metadata: {labels: {app: aegistrace-worker}}
+    spec:
+      serviceAccountName: aegistrace-worker
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: worker
+          image: REGISTRY/aegistrace:VERSION
+          command: [aegistrace-worker]
+          ports: [{name: metrics, containerPort: 9101}]
+          envFrom: [{configMapRef: {name: aegistrace-config}}]
+          env:
+            - {name: AEGIS_DATABASE_URL, valueFrom: {secretKeyRef: {name: aegistrace-db, key: app_url}}}
+            - {name: AEGIS_SIGNING_KEY_FILE, value: /run/aegis/signing-key.pem}
+          volumeMounts:
+            - {name: signing-key, mountPath: /run/aegis, readOnly: true}
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+      volumes:
+        - name: signing-key
+          secret: {secretName: aegistrace-signing-key, defaultMode: 0400}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: aegistrace-dispatcher, namespace: aegistrace, labels: {app: aegistrace-dispatcher}}
+spec:
+  replicas: 2  # safe: rows are claimed with FOR UPDATE SKIP LOCKED
+  selector: {matchLabels: {app: aegistrace-dispatcher}}
+  template:
+    metadata: {labels: {app: aegistrace-dispatcher}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: dispatcher
+          image: REGISTRY/aegistrace:VERSION
+          command: [aegistrace-dispatcher]
+          envFrom: [{configMapRef: {name: aegistrace-config}}]
+          env:
+            - {name: AEGIS_DISPATCHER_DATABASE_URL, valueFrom: {secretKeyRef: {name: aegistrace-db, key: dispatcher_url}}}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: aegistrace-config, namespace: aegistrace}
+data:
+  AEGIS_REDIS_URL: rediss://REDIS_HOST:6379/0
+  AEGIS_OPA_URL: http://aegistrace-opa:8181
+  AEGIS_OIDC_ISSUER: https://YOUR_IDP/
+  AEGIS_OIDC_AUDIENCE: aegistrace-api
+  AEGIS_OIDC_JWKS: https://YOUR_IDP/.well-known/jwks.json

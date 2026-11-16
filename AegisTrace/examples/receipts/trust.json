@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "keys": [
+    {
+      "key_id": "ed25519:b9533c7aff0ad7b155b9553a43efc285",
+      "public_key": "/amRmOz6LQnaopJp0rDBLgInDLsgIgA2ErO4o9zKTFE=",
+      "not_before": "2026-01-01T00:00:00Z"
+    }
+  ]
+}
