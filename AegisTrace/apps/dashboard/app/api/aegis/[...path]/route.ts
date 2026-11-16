@@ -13,6 +13,7 @@ const ALLOW: [string, RegExp][] = [
   ["GET", new RegExp(`^v1/runs/${ID}(/(events|replay|verification|receipt))?$`)],
   ["GET", new RegExp(`^v1/agents/${ID}/grants$`)],
   ["GET", /^v1\/(rules|rules\/history|rules\/file|insights)$/],
+  ["GET", /^v1\/memory\/[a-z0-9_.-]{1,64}$/],
   ["PUT", /^v1\/rules$/],
   ["POST", /^v1\/rules\/file$/],
   ["POST", new RegExp(`^v1/(runs|projects|agents|policy/simulate)$`)],

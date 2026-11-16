@@ -4,11 +4,11 @@
 import type { ReactNode } from "react";
 import { useToasts } from "@/lib/client";
 
-const GOOD = new Set(["SUCCEEDED", "allow", "approved", "consumed", "VALID", "IDENTICAL", "ok"]);
+const GOOD = new Set(["SUCCEEDED", "active", "allow", "approved", "consumed", "VALID", "IDENTICAL", "ok"]);
 const BAD = new Set(["FAILED", "TIMED_OUT", "NEEDS_RECONCILIATION", "deny", "rejected", "expired", "down", "DIVERGED"]);
 const ACTIVE = new Set(["QUEUED", "RUNNING", "RECOVERING", "RETRY_SCHEDULED", "VALIDATING", "CREATED"]);
 
-const ATTN = new Set(["WAITING_FOR_APPROVAL", "pending", "require_approval"]);
+const ATTN = new Set(["WAITING_FOR_APPROVAL", "quarantined", "pending", "require_approval"]);
 
 export function tone(value: string): "good" | "bad" | "attn" | "neutral" {
   if (GOOD.has(value)) return "good";

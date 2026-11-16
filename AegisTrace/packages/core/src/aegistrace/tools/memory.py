@@ -78,7 +78,7 @@ class ForgetOut(Strict):
 
 
 class MemoryClient(Protocol):
-    def post(self, path: str, body: dict[str, Any], idempotency_key: str | None = None) -> dict[str, Any]: ...
+    def post(self, path: str, body: dict[str, Any], idempotency_key: str | None = None) -> Any: ...
 
 
 class HttpMemoryClient:
@@ -88,12 +88,11 @@ class HttpMemoryClient:
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._http = httpx.Client(base_url=base_url.rstrip("/") + "/api/v1", headers=headers, timeout=timeout)
 
-    def post(self, path: str, body: dict[str, Any], idempotency_key: str | None = None) -> dict[str, Any]:
+    def post(self, path: str, body: dict[str, Any], idempotency_key: str | None = None) -> Any:
         headers = {"Idempotency-Key": idempotency_key} if idempotency_key else {}
         r = self._http.post(path, json=body, headers=headers)
         r.raise_for_status()
-        out: dict[str, Any] = r.json()
-        return out
+        return r.json()
 
 
 def client_from_env(env: Mapping[str, str]) -> HttpMemoryClient | None:
@@ -104,6 +103,28 @@ def client_from_env(env: Mapping[str, str]) -> HttpMemoryClient | None:
 
 def memory_user(ctx: ToolContext, subject: str) -> str:
     return f"{ctx.tenant_id}/{subject}"
+
+
+def browse(client: MemoryClient, tenant_id: str, subject: str, limit: int = 50) -> list[dict[str, Any]]:
+    """What is stored about a subject, for human review in the dashboard: active
+    memories and those AegisMem quarantined, each with the run that wrote it
+    (None when it was not written through AegisTrace)."""
+    user = f"{tenant_id}/{subject}"
+    out: list[dict[str, Any]] = []
+    for status in ("active", "pending"):
+        for m in client.post("/memories/list", {"user_id": user, "status": status, "limit": limit}):
+            prov = (m.get("metadata") or {}).get("aegistrace") or {}
+            out.append(
+                {
+                    "memory_id": m["memory_id"],
+                    "content": m["content"],
+                    "status": m["status"],
+                    "created_at": m["created_at"],
+                    "agent_id": m.get("agent_id", ""),
+                    "run_id": prov.get("run_id"),
+                }
+            )
+    return sorted(out, key=lambda m: m["created_at"], reverse=True)
 
 
 def register_memory_tools(reg: ToolRegistry, client: MemoryClient) -> None:

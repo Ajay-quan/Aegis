@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Aegis local stack: AegisTrace + AegisMem + dashboard, one command.
+#   ./aegis up      start everything (first run creates dev keys and tokens)
+#   ./aegis demo    load demo activity (runs, a blocked action, governed memory, a pending approval)
+#   ./aegis token   print a dashboard sign-in token (dev only, expires in 8h)
+#   ./aegis open    open the dashboard
+#   ./aegis test    run every test suite against the running stack
+#   ./aegis down    stop everything (data is kept; add -v to delete it)
+set -euo pipefail
+cd "$(dirname "$0")"
+T=AegisTrace
+
+# iCloud-synced folders corrupt Python virtualenvs (hidden or duplicated .pth
+# files, so imports fail). Keep the env in .venv.nosync, which iCloud skips,
+# and point .venv at it so plain `uv run` works too.
+pyenv() {
+  (cd "$T" && if [ ! -L .venv ]; then
+     if [ -d .venv ]; then mv .venv ".venv-old-$$.nosync"; (rm -rf ".venv-old-$$.nosync" &); fi
+     UV_PROJECT_ENVIRONMENT=.venv.nosync uv sync -q && ln -sfn .venv.nosync .venv
+   else uv sync -q; fi)
+}
+
+need() { command -v "$1" >/dev/null || { echo "missing: $1 ($2)"; exit 1; }; }
+
+bootstrap() {
+  need docker "https://docs.docker.com/get-docker/"; need uv "https://docs.astral.sh/uv/"
+  docker compose up -d --wait postgres redis opa
+  # Idempotent: keeps existing dev keys, (re)provisions the demo tenant, mints fresh 8h tokens.
+  pyenv && (cd "$T" && uv run python scripts/dev_bootstrap.py >/dev/null)
+}
+
+case "${1:-help}" in
+  up)
+    bootstrap
+    docker compose up -d --build --wait
+    echo; echo "Aegis is running."
+    echo "  Dashboard  http://localhost:3000   (sign in with: ./aegis token)"
+    echo "  API        http://localhost:8000/docs"
+    echo "  Demo data  ./aegis demo"
+    ;;
+  demo)
+    pyenv
+    (cd "$T" && uv run python scripts/seed_demo.py && ./examples/governed_memory/run.sh >/dev/null && echo "governed memory demo loaded")
+    ;;
+  test)
+    pyenv
+    COMPOSE_PROJECT_NAME=aegis bash "$T/scripts/test_db.sh" >/dev/null
+    echo "== AegisTrace (Python)";  (cd "$T" && uv run pytest -q)
+    echo "== AegisTrace dashboard"; (cd "$T/apps/dashboard" && AEGIS_TOKEN="$("$0" token)" npx playwright test)
+    echo "== AegisMem extension";   (cd AegisMem/extension && npm test --silent)
+    ;;
+  token) python3 -c 'import json;print(json.load(open("AegisTrace/.dev/tokens.json"))["user"])' ;;
+  open) open http://localhost:3000 2>/dev/null || xdg-open http://localhost:3000 ;;
+  down) shift; docker compose down "$@" ;;
+  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' ;;
+esac

@@ -11,7 +11,14 @@ import secrets
 
 import pytest
 
-from aegistrace.tools.memory import ForgetArgs, HttpMemoryClient, RecallArgs, RememberArgs, register_memory_tools
+from aegistrace.tools.memory import (
+    ForgetArgs,
+    HttpMemoryClient,
+    RecallArgs,
+    RememberArgs,
+    browse,
+    register_memory_tools,
+)
 from aegistrace.tools.registry import ToolContext, ToolRegistry
 
 URL = os.environ.get("AEGIS_TEST_MEMORY_URL")
@@ -20,7 +27,8 @@ pytestmark = pytest.mark.skipif(not URL, reason="AEGIS_TEST_MEMORY_URL not set")
 
 def test_remember_recall_forget_against_live_aegismem():
     reg = ToolRegistry()
-    register_memory_tools(reg, HttpMemoryClient(URL or "", os.environ.get("AEGIS_TEST_MEMORY_API_KEY")))
+    client = HttpMemoryClient(URL or "", os.environ.get("AEGIS_TEST_MEMORY_API_KEY"))
+    register_memory_tools(reg, client)
     tenant = "tnt_" + secrets.token_hex(4)
     ctx = ToolContext(tenant_id=tenant, run_id="run_contract", idempotency_key="k_" + secrets.token_hex(8))
     remember, recall, forget = (reg.get(n) for n in ("memory.remember", "memory.recall", "memory.forget"))
@@ -30,6 +38,9 @@ def test_remember_recall_forget_against_live_aegismem():
     assert stored.status == "active", stored
     again = remember.execute(ctx, RememberArgs(subject="acme", text="Acme prefers invoices in EUR"))
     assert again.memory_id == stored.memory_id  # same idempotency key: no duplicate write
+
+    listed = browse(client, tenant, "acme")
+    assert [(m["memory_id"], m["run_id"]) for m in listed] == [(stored.memory_id, "run_contract")]
 
     found = recall.execute(ctx, RecallArgs(subject="acme", query="Acme invoices EUR"))
     assert stored.memory_id in [m.memory_id for m in found.memories]

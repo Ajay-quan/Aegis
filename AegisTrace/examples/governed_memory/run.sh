@@ -3,8 +3,7 @@
 # Copyright 2026 AegisTrace contributors
 # Governed memory demo: an agent remembers and recalls through AegisMem, every
 # access is policy-checked and signed, and erasing memory needs human approval.
-# Prereqs: an AegisMem server, and the compose stack started with AEGIS_MEMORY_URL
-# pointing at it (see README.md in this folder).
+# Prereqs: the stack running with AegisMem connected (`./aegis up` from the repo root).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export AEGIS_API_URL=http://127.0.0.1:8000
@@ -34,9 +33,8 @@ RUN2=$($A --json runs submit --agent "$AGENT" --input $D/recall.json --wait | id
 $A runs events "$RUN2"
 
 echo "== 3. Erasing memory pauses for approval: open the dashboard, Approvals"
-MID=$(curl -s -X POST http://127.0.0.1:${AEGIS_MEMORY_PORT:-8100}/api/v1/retrieve -H 'content-type: application/json' \
-      -d '{"query":"Acme invoices","user_id":"tnt_demo/acme","top_k":1}' \
-      | python3 -c 'import json,sys;print(json.load(sys.stdin)["results"][0]["memory_id"])')
+MID=$(curl -s -H "Authorization: Bearer $AEGIS_TOKEN" "$AEGIS_API_URL/v1/memory/acme" \
+      | python3 -c 'import json,sys;print(json.load(sys.stdin)["items"][0]["memory_id"])')
 sed "s/MEMORY_ID/$MID/" $D/forget.json > ".dev/forget-$MID.json"
 RUN3=$($A --json runs submit --agent "$AGENT" --input ".dev/forget-$MID.json" | id)
 echo "run $RUN3 is waiting for approval"

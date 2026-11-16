@@ -10,3 +10,10 @@ node_modules
 apps/dashboard/.next
 apps/dashboard/node_modules
 packages/sdk-typescript/node_modules
+apps/dashboard/.next.nosync
+apps/dashboard/test-results
+apps/dashboard/playwright-report
+packages/sdk-typescript/dist
+# macOS/iCloud duplicate copies ("name 2.py") must never reach an image
+**/* 2
+**/* 2.*

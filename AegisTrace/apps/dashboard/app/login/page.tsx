@@ -10,7 +10,7 @@ async function login(form: FormData) {
   const r = await fetch(`${API_URL}/v1/runs?limit=1`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
   if (!r.ok) redirect("/login?error=1");
   (await cookies()).set(TOKEN_COOKIE, token, {
-    httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" && !API_URL.startsWith("http://127."),
+    httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" && !API_URL.startsWith("http://127.") && process.env.AEGIS_DASHBOARD_HTTP !== "1",  // AEGIS_DASHBOARD_HTTP=1: local compose served over plain http
     path: "/", maxAge: 8 * 3600,
   });
   redirect("/");

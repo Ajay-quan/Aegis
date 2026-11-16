@@ -112,3 +112,23 @@ test("memory page shows governed AegisMem activity, including blocked access", a
   await expect(rows.filter({ hasText: "Remembered" })).toHaveCount(1);
   await expect(rows.filter({ hasText: "Recalled" }).filter({ hasText: "no matching grant" })).toHaveCount(1);
 });
+
+test("memory page: clicking a subject shows what is stored and which run wrote it", async ({ page }) => {
+  const r = await fetch(`${process.env.AEGIS_API_URL ?? "http://127.0.0.1:8000"}/v1/tools`, { headers: { Authorization: `Bearer ${token}` } });
+  test.skip(!((await r.json()).items as { name: string }[]).some((t) => t.name === "memory.remember"), "stack started without AEGIS_MEMORY_URL");
+  const project = await api.createProject(`pw-mem2-${Date.now()}`);
+  const agent = await api.registerAgent(project.id, "pw-mem2-agent");
+  await api.grantTool(agent.id, "memory.remember", 2);
+  const subject = `pw${Date.now()}`;
+  const { id } = await api.submitRun(agent.id, { task: "pw", mock_script: [
+    { tool: "memory.remember", args: { subject, text: "Prefers invoices in EUR" } }, { final: "ok" },
+  ] });
+  expect((await api.waitForRun(id, 30_000)).state).toBe("SUCCEEDED");
+  await login(page);
+  await page.goto("/memory");
+  await page.getByRole("button", { name: subject }).first().click();
+  await expect(page.getByText(`Stored about ${subject}`)).toBeVisible();
+  await expect(page.getByText("Prefers invoices in EUR")).toBeVisible();
+  await page.getByRole("link", { name: /^from run_/ }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${id}`));
+});

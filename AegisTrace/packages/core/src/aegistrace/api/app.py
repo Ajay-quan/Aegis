@@ -15,8 +15,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
+import httpx
 import redis
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -107,6 +108,7 @@ class Deps:
     rate_limit_per_minute: int = 600
     expose_metrics: bool = False
     gateway: Any = None  # ToolGateway, used only for policy dry runs (never executes)
+    memory: Any = None  # MemoryClient (AegisMem), for read-only memory review; None when not configured
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -707,6 +709,22 @@ def create_app(deps: Deps) -> FastAPI:
             ],
         }
 
+    @app.get("/v1/memory/{subject}")
+    def memory_subject(
+        subject: str = Path(pattern=r"^[a-z0-9_.-]{1,64}$"),
+        p: Principal = scoped("payloads:read"),
+    ) -> dict[str, Any]:
+        """Memories stored about a subject in this tenant (memory content is payload data)."""
+        if deps.memory is None:
+            raise HTTPException(404, "memory is not configured")
+        from aegistrace.tools.memory import browse
+
+        try:
+            items = browse(deps.memory, p.tenant_id, subject)
+        except httpx.HTTPError as e:
+            raise HTTPException(502, "memory service unavailable") from e
+        return {"subject": subject, "items": items}
+
     @app.get("/v1/policy-decisions")
     def policy_decisions(
         p: Principal = scoped("audit:read"),
@@ -832,7 +850,6 @@ def build_from_env() -> FastAPI:
     from aegistrace.tools.gateway import ToolGateway
     from aegistrace.tools.memory import client_from_env
 
-    deps.gateway = ToolGateway(
-        deps.engine, build_registry(DemoSink(), memory=client_from_env(os.environ)), OpaPolicyEngine(s.opa_url)
-    )
+    deps.memory = client_from_env(os.environ)
+    deps.gateway = ToolGateway(deps.engine, build_registry(DemoSink(), memory=deps.memory), OpaPolicyEngine(s.opa_url))
     return create_app(deps)
