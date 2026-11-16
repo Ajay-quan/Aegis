@@ -16,10 +16,7 @@ import os
 import secrets
 from pathlib import Path
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
-
-from aegistrace.evidence.signing import b64, load_local_signer
+from aegistrace.evidence.signer_service import KeyRing
 from aegistrace.identity.devissuer import DevIssuer
 from aegistrace.persistence.admin import provision_tenant
 from aegistrace.persistence.db import make_engine
@@ -56,34 +53,37 @@ def main() -> None:
 
     SECRETS.mkdir(parents=True, exist_ok=True)
     os.chmod(SECRETS.parent, 0o700)
-    key_path = SECRETS / "signing-key.pem"
-    if not key_path.exists():
-        pem = Ed25519PrivateKey.generate().private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
-        key_path.write_bytes(pem)
-    # Compose containers (uid 10001) read this through a bind mount, so it is
-    # world-readable locally; the API accepts that only with
-    # AEGIS_DEV_ALLOW_SHARED_KEY_FILE=1 (set in compose.yaml, dev only).
-    key_path.chmod(0o644)
+    key_path = SECRETS / "signing-key.pem"  # legacy location, imported into the key ring below
     # Development key-encryption key for payloads at rest (production: a KMS key).
     kek_path = SECRETS / "payload-kek"
     if not kek_path.exists():
         kek_path.write_text(base64.b64encode(secrets.token_bytes(32)).decode())
     kek_path.chmod(0o644)  # read by compose containers through the bind mount (dev only)
-    if (SECRETS / "issuer-key.pem").exists():
-        issuer = DevIssuer.load(SECRETS)
+    # The dev identity provider's token-signing key is mounted only into the dev-idp service; the API
+    # and workers get just the public JWKS.
+    idp = ROOT / ".dev" / "idp"
+    idp.mkdir(parents=True, exist_ok=True)
+    for name in ("issuer-key.pem", "kid"):  # move from the old shared location
+        if (SECRETS / name).exists() and not (idp / name).exists():
+            (SECRETS / name).replace(idp / name)
+    (SECRETS / "issuer-key.pem").unlink(missing_ok=True)
+    if (idp / "issuer-key.pem").exists():
+        issuer = DevIssuer.load(idp)
     else:
         issuer = DevIssuer()
-        issuer.save(SECRETS)
+        issuer.save(idp)
+    (SECRETS / "jwks.json").write_text(json.dumps(issuer.jwks()))
     (SECRETS / "jwks.json").chmod(0o644)
 
-    signer = load_local_signer(str(key_path), allow_shared_file=True)
-    trust = {
-        "version": 1,
-        "keys": [
-            {"key_id": signer.key_id, "public_key": b64(signer.public_key_raw()), "not_before": "2026-01-01T00:00:00Z"}
-        ],
-    }
+    # Checkpoint signing keys live only in the signing service's key ring (.dev/signer). The first
+    # run imports the earlier dev key so receipts signed before the ring existed keep verifying, then
+    # removes it from .dev/secrets, which the API and workers mount.
+    ring = KeyRing(ROOT / ".dev" / "signer")
+    ring.init(key_path if key_path.exists() else None)
+    key_path.unlink(missing_ok=True)
+    trust = ring.trust_store()
     (ROOT / ".dev" / "trust.json").write_text(json.dumps(trust, indent=2))
+    active = ring.active_id()
 
     provision_tenant(make_engine(OWNER_URL), args.tenant, args.tenant)
     tokens = {
@@ -93,7 +93,7 @@ def main() -> None:
     (ROOT / ".dev" / "tokens.json").write_text(json.dumps(tokens, indent=2))
     (ROOT / ".dev" / "tokens.json").chmod(0o600)
     print(f"tenant:       {args.tenant}")
-    print(f"signing key:  {signer.key_id}")
+    print(f"signing key:  {active} (held by the signing service)")
     print(f"trust store:  {ROOT / '.dev' / 'trust.json'}")
     print(f"tokens:       {ROOT / '.dev' / 'tokens.json'} (dev only, expire in {args.ttl // 3600}h)")
 

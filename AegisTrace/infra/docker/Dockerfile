@@ -16,7 +16,8 @@ FROM python:3.12.13-slim-bookworm
 # Apply Debian security updates at build time (the base tag lags behind them).
 RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-recommends libpq5 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-RUN groupadd --system --gid 10001 aegis && useradd --system --uid 10001 --gid aegis --no-create-home aegis
+RUN groupadd --system --gid 10001 aegis && useradd --system --uid 10001 --gid aegis --no-create-home aegis \
+    && install -d -o 10001 -g 10001 -m 0770 /run/aegis-signer  # signing-service socket dir (named volume seed)
 WORKDIR /app
 COPY --from=build --chown=root:root /app/.venv /app/.venv
 COPY --from=build --chown=root:root /app/migrations /app/migrations

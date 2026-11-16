@@ -31,5 +31,6 @@ class Settings:
             oidc_issuer=need("AEGIS_OIDC_ISSUER"),
             oidc_audience=need("AEGIS_OIDC_AUDIENCE"),
             oidc_jwks=need("AEGIS_OIDC_JWKS"),
-            signing_key_file=need("AEGIS_SIGNING_KEY_FILE"),
+            # With the signing service (AEGIS_SIGNER_SOCKET) this process holds no key file at all.
+            signing_key_file="" if os.environ.get("AEGIS_SIGNER_SOCKET") else need("AEGIS_SIGNING_KEY_FILE"),
         )

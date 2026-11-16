@@ -5,6 +5,7 @@
 #   ./aegis token   print a dashboard sign-in token (dev only, expires in 8h)
 #   ./aegis open    open the dashboard
 #   ./aegis test    run every test suite against the running stack
+#   ./aegis rotate-keys  rotate the checkpoint signing key and refresh the trust store
 #   ./aegis down    stop everything (data is kept; add -v to delete it)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -57,8 +58,15 @@ case "${1:-help}" in
       | tee /dev/stderr | { ! grep -qE "^ +[0-9]+ skipped"; })  # a skipped browser test means the stack is not wired; fail
     echo "== AegisMem extension";   (cd AegisMem/extension && npm test --silent)
     ;;
+  rotate-keys)
+    # New active signing key in the signing service; the old one keeps signing for a short grace
+    # period, then verifiers accept it only for checkpoints made before it was retired.
+    docker compose exec -T signer aegistrace-signer rotate --keys /keys
+    pyenv && (cd "$T" && uv run aegistrace-signer trust-store --keys .dev/signer -o .dev/trust.json)
+    echo "Trust store updated: $T/.dev/trust.json (publish it to verifiers)"
+    ;;
   token) python3 -c "import json;print(json.load(open('$PWD/$T/.dev/tokens.json'))['user'])" ;;
   open) open http://localhost:3000 2>/dev/null || xdg-open http://localhost:3000 ;;
   down) shift; docker compose down "$@" ;;
-  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

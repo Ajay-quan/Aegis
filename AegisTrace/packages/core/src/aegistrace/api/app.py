@@ -954,18 +954,17 @@ def build_from_env() -> FastAPI:
     """Entry point for uvicorn: `uvicorn aegistrace.api.app:build_from_env --factory`."""
     sealing.configure_from_env()  # payload encryption at rest when AEGIS_PAYLOAD_KEK_FILE is set
     tracing.configure("api")
-    from aegistrace.evidence.signing import load_local_signer
 
     from .logging import configure
 
     configure()
+    from aegistrace.evidence.signer_service import signer_from_env
+
     s = Settings.from_env()
     deps = Deps(
         engine=make_engine(s.database_url),
         validator=TokenValidator(s.oidc_issuer, s.oidc_audience, JwksCache(s.oidc_jwks)),
-        signer=load_local_signer(
-            s.signing_key_file, allow_shared_file=os.environ.get("AEGIS_DEV_ALLOW_SHARED_KEY_FILE") == "1"
-        ),
+        signer=signer_from_env({**os.environ, "AEGIS_SIGNING_KEY_FILE": s.signing_key_file}),
         redis=redis.Redis.from_url(s.redis_url, decode_responses=True, socket_timeout=0.5),
         rate_limit_per_minute=int(os.environ.get("AEGIS_RATE_LIMIT_PER_MINUTE", "600")),
         expose_metrics=os.environ.get("AEGIS_API_METRICS") == "1",

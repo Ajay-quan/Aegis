@@ -69,7 +69,7 @@ services:
       AEGIS_DEV_IDP_KEYS: /run/aegis
       AEGIS_DEV_IDP_PUBLIC_URL: http://localhost:9000
       AEGIS_DEV_IDP_REDIRECT_URIS: http://localhost:3000/auth/callback,http://127.0.0.1:3100/auth/callback
-    volumes: ["./AegisTrace/.dev/secrets:/run/aegis:ro"]
+    volumes: ["./AegisTrace/.dev/idp:/run/aegis:ro"]  # its key only; the API sees just the public JWKS
     ports: ["127.0.0.1:9000:9000"]
     read_only: true
     cap_drop: [ALL]

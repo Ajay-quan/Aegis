@@ -1,0 +1,28 @@
+{
+  "measured_at": "20261116T160439Z",
+  "results": [
+    {
+      "phase": "scale-1",
+      "workers": 1,
+      "vus": 5,
+      "duration": "10s",
+      "fault_injected_at_s": null,
+      "runs_by_state": {
+        "SUCCEEDED": 100
+      },
+      "runs_per_s": 6.0,
+      "e2e_p50_ms": 276,
+      "e2e_p95_ms": 1109,
+      "http_failed_rate": 0.6022353714661407,
+      "outbox_pending_or_dead": 0,
+      "sequence_gaps": 0,
+      "duplicate_executions": 0,
+      "executions_without_allow": 0,
+      "denied_by_policy_outage": 0,
+      "receipts": {
+        "VALID": 100
+      },
+      "receipts_valid": 100
+    }
+  ]
+}

@@ -32,6 +32,7 @@ aegistrace-worker = "aegistrace.workers.main:worker_main"
 aegistrace-dispatcher = "aegistrace.workers.main:dispatcher_main"
 aegistrace = "aegistrace.cli.main:main"
 aegistrace-dev-idp = "aegistrace.identity.devidp:main"
+aegistrace-signer = "aegistrace.evidence.signer_service:main"
 
 [dependency-groups]
 dev = [

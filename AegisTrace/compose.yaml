@@ -47,7 +47,8 @@ services:
       AEGIS_OIDC_ISSUER: https://dev-issuer.aegistrace.local
       AEGIS_OIDC_AUDIENCE: aegistrace-api
       AEGIS_OIDC_JWKS: /run/aegis/jwks.json
-      AEGIS_SIGNING_KEY_FILE: /run/aegis/signing-key.pem
+      # Checkpoints are signed by the separate `signer` service; this process holds no signing key.
+      AEGIS_SIGNER_SOCKET: /run/aegis-signer/signer.sock
       AEGIS_PAYLOAD_KEK_FILE: /run/aegis/payload-kek  # payload encryption at rest (dev key; production: KMS)
       AEGIS_API_METRICS: "1"
       # Tracing: off unless an OTLP endpoint is set (./aegis up --observability sets it to Tempo).
@@ -57,7 +58,7 @@ services:
       # Governed memory (AegisMem). Empty = memory.* tools not registered.
       AEGIS_MEMORY_URL: ${AEGIS_MEMORY_URL:-}
       AEGIS_MEMORY_API_KEY: ${AEGIS_MEMORY_API_KEY:-}
-    volumes: ["./.dev/secrets:/run/aegis:ro"]
+    volumes: ["./.dev/secrets:/run/aegis:ro", "signer_sock:/run/aegis-signer"]
     ports: ["127.0.0.1:8000:8000"]
     read_only: true
     cap_drop: [ALL]
@@ -65,10 +66,26 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
+      signer: {condition: service_healthy}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
       interval: 5s
       retries: 20
+
+  # The only process with checkpoint signing keys. No network at all: reachable
+  # solely through the Unix socket in the shared `signer_sock` volume.
+  signer:
+    build: {context: ., dockerfile: infra/docker/Dockerfile}
+    command: ["aegistrace-signer", "serve", "--keys", "/keys", "--socket", "/run/aegis-signer/signer.sock"]
+    volumes: ["./.dev/signer:/keys", "signer_sock:/run/aegis-signer"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys;sys.exit(0 if os.path.exists('/run/aegis-signer/signer.sock') else 1)"]
+      interval: 2s
+      retries: 30
 
   worker:
     build: {context: ., dockerfile: infra/docker/Dockerfile}
@@ -79,6 +96,7 @@ services:
     volumes:
       - "./.dev/secrets:/run/aegis:ro"
       - "./.dev/anchor:/var/lib/aegis-anchor"  # dev stand-in for S3 Object Lock / transparency log
+      - "signer_sock:/run/aegis-signer"
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -88,6 +106,7 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
+      signer: {condition: service_healthy}
 
   dispatcher:
     build: {context: ., dockerfile: infra/docker/Dockerfile}
@@ -99,3 +118,6 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
+
+volumes:
+  signer_sock:

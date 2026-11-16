@@ -32,14 +32,21 @@ export function useLive<T>(path: string | null, interval = 3000) {
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef(0);
 
   const load = useCallback(async () => {
     if (!path) return;
+    // A poll and a reload() can overlap; only the most recently started request may update state,
+    // so a slow, older response never overwrites a newer one (e.g. "erased" flipping back).
+    const seq = ++latest.current;
     try {
-      setData(await api<T>(path));
+      const next = await api<T>(path);
+      if (seq !== latest.current) return;
+      setData(next);
       setError(null);
       setUpdatedAt(Date.now());
     } catch (e) {
+      if (seq !== latest.current) return;
       setError(e instanceof Error ? e.message : "error");
     }
   }, [path]);

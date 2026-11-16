@@ -2,7 +2,7 @@
 
 ## Blocking any production or public deployment
 1. **Independent security review** of the sandbox, authentication/authorization, cryptographic protocol, tenant isolation and network controls (§48).
-2. **Managed signing backend.** Only the file-based dev signer exists. Verify Ed25519 support in the chosen KMS/HSM before choosing it, otherwise run a dedicated signing service. Implement `Signer` for it.
+2. **Managed signing backend.** Partly done (docs/operations/SIGNING_KEYS.md): a dedicated signing service (no network, socket only, checkpoint-only signing), key rotation with a grace period, and trust-store export. Remaining: an HSM/KMS backend (verify Ed25519 support first).
 3. ~~License~~ Done: split Apache-2.0 / FSL-1.1-ALv2 (ADR-021). If outside contributions are accepted, decide on a DCO or CLA first, so contributed code can be offered under both licenses.
 4. ~~CI never executed on GitHub~~ Done: CI runs on GitHub and is green (Python, TypeScript, supply chain with secret scan, Trivy and SBOM, AegisMem integration). Actions pinned to commit SHAs.
 5. **Release signing and provenance** (Sigstore/cosign, SLSA) are not implemented.

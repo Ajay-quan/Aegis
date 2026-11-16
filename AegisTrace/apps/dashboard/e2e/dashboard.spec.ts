@@ -177,7 +177,7 @@ test.describe("single sign-on (OIDC authorization code + PKCE)", () => {
 });
 
 test("privacy: erase a finished run's content from its page; the erasure is logged", async ({ page }) => {
-  const project = await api.createProject(`pw-erase-${Date.now()}`);
+  const project = await api.createProject(`pw-erase-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const agent = await api.registerAgent(project.id, "pw-erase-agent");
   await api.grantTool(agent.id, "calc.add", 0);
   const { id } = await api.submitRun(agent.id, { task: "pw secret task", mock_script: [{ tool: "calc.add", args: { a: 1, b: 2 } }, { final: "secret answer" }] });
@@ -191,7 +191,7 @@ test("privacy: erase a finished run's content from its page; the erasure is logg
   const reason = `customer deletion request ${id}`;  // unique: the erasure log persists across test runs
   page.once("dialog", (d) => d.accept(reason));
   await page.getByRole("button", { name: "Erase content" }).click();
-  await expect(page.getByText("content erased")).toBeVisible();
+  await expect(page.getByText("content erased", { exact: true })).toBeVisible();  // the badge, not the "Content erased" toast
   await expect(page.getByText("secret answer")).toHaveCount(0);
   await page.getByRole("tab", { name: "evidence" }).click();
   await expect(page.getByText("Chain intact and signed")).toBeVisible();  // evidence survives erasure

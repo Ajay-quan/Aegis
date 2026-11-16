@@ -62,12 +62,10 @@ def worker_main() -> None:
     register_from_env(registry, os.environ)  # administrator-configured MCP servers (AEGIS_MCP_SERVERS_FILE)
     gateway = ToolGateway(engine, registry, OpaPolicyEngine(os.environ["AEGIS_OPA_URL"]))
     from aegistrace.evidence.anchor import FileAnchor
-    from aegistrace.evidence.signing import load_local_signer
+    from aegistrace.evidence.signer_service import signer_from_env
 
     # Fail at startup, not mid-run, if evidence prerequisites are missing (INV-004).
-    signer = load_local_signer(
-        os.environ["AEGIS_SIGNING_KEY_FILE"], allow_shared_file=os.environ.get("AEGIS_DEV_ALLOW_SHARED_KEY_FILE") == "1"
-    )
+    signer = signer_from_env(dict(os.environ))  # signing service socket, or the dev key file
     anchor_path = os.environ.get("AEGIS_ANCHOR_FILE")
     worker = Worker(
         engine,
