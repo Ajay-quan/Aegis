@@ -806,3 +806,14 @@ Still open, and not doable from this laptop: an independent security review; an 
 - Bug found by the browser tests: the new redirect broke SSO. The session cookie is SameSite=Strict, so it is omitted on the last hop of a redirect chain that began at the identity provider. The callback now lands on a same-site page that refreshes to the dashboard; the cookie stays Strict.
 - Redirects use `nextUrl`, so the browser's own host is kept (localhost vs 127.0.0.1).
 - Verified: Playwright 10/10 (new homepage test included), extension 22/22, AegisTrace pytest all pass.
+
+## Session 24 — 2026-11-16: Aegis wordmark as the logo; homepage refined around the eight-product plan
+
+- **Logo:** the "Aegis" wordmark (Inter 600, tight tracking) is the logo, in `components/Logo.tsx`. It is used on the homepage nav and footer, the sign-in page, and the dashboard sidebar ("Aegis Studio"). Product names extend it (`ProductName`: "Aegis" muted, product bright). The browser title is now "Aegis".
+- **Homepage** restructured to the owner's plan:
+  - The eight pillars are now the products (AegisMem, Trace, Runtime, Guard, Eval, Optimize, Models, Studio), each with three items honestly marked Built / In progress / Planned against the code. Eval, Optimize and Models are mostly Planned; Studio is partly built.
+  - New Roadmap section (Now: Mem + Trace; Next: Studio + Guard; Later: Runtime, Eval, Optimize, Models).
+  - New Integrations section: available items were verified in code (Ollama, Anthropic, Neo4j and LangChain/LangGraph via AegisMem; MCP; Postgres; Qdrant; Redis; OTel; OIDC; SDKs). Gemini, vLLM, llama.cpp, Hugging Face, PEFT/LoRA/QLoRA/TRL and AWS are marked Planned.
+- **Typography system:** one scale (display 46–84, h2 34–56, h3 24–32, statement 30–50, lead 18–21, body 17, small 14, micro 11.5 mono), one section rhythm and one 1160 px column. Section heads are split (title left, intro right, baseline-aligned). The nav underlines the current section.
+- Checked at 390, 900 and 1440 px: no errors, no horizontal scroll. Playwright 10/10.
+- Not built (from the plan's sitemap): /platform, /products, /playground, /docs, /integrations, /architecture, /research and /changelog pages; Studio sections Agent Builder, Model Hub, Evaluation Lab, Optimization Center and Deployment Center.

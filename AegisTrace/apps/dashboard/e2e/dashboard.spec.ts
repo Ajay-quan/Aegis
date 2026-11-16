@@ -144,7 +144,7 @@ test.describe("single sign-on (OIDC authorization code + PKCE)", () => {
   test("signs in through the identity provider, with the right access per user", async ({ page, context }) => {
     await page.goto("/login");
     await page.getByRole("link", { name: "Sign in", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Sign in to AegisTrace" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in to Aegis" })).toBeVisible();
     await page.getByRole("button", { name: /Dev admin/ }).click();
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
     const cookie = (await context.cookies()).find((c) => c.name === "aegis_token");
@@ -203,7 +203,7 @@ test("visitors see the harness introduction first, with sign-in at the top right
   await page.goto("/");
   await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Agents that act.");
-  for (const p of ["Identity", "Permission", "Approval", "Memory", "Evidence", "Privacy", "Isolation", "Insight"]) {
+  for (const p of ["Mem", "Trace", "Runtime", "Guard", "Eval", "Optimize", "Models", "Studio"]) {
     await expect(page.locator(`#pillar-${p.toLowerCase()}`)).toHaveCount(1);
   }
   const signIn = page.getByRole("banner").getByRole("link", { name: "Sign in" });

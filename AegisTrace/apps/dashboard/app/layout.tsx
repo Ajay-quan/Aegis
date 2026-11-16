@@ -8,7 +8,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono", display: "swap" });
 
-export const metadata: Metadata = { title: "AegisTrace", description: "Verifiable agent execution" };
+export const metadata: Metadata = { title: "Aegis", description: "The harness for production AI agents: memory, permissions, approvals and a record anyone can verify." };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

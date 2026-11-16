@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright 2026 AegisTrace contributors
 import { redirect } from "next/navigation";
+import { Logo } from "@/components/Logo";
 import { OIDC, oidcEnabled, tokenPasteAllowed } from "@/lib/oidc";
 import { startSession } from "@/lib/session";
 
@@ -34,13 +35,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <div className="grid min-h-screen place-items-center px-4">
       <div className="w-full max-w-[380px] fade-in">
-        <a href="/welcome" className="mb-6 inline-block text-[13px] muted hover:text-[var(--text)]">Back to Aegis</a>
-        <div className="mb-8 flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-md" style={{ background: "var(--green-bg)", border: "1px solid rgba(62,207,142,.35)" }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5"><path d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7l8-4z" /></svg>
-          </span>
-          <span className="text-[16px] font-semibold tracking-tight">AegisTrace</span>
-        </div>
+        <a href="/welcome" className="mb-6 inline-block text-[13px] muted hover:text-[var(--text)]">Back to the introduction</a>
+        <div className="mb-8"><Logo product="Studio" size={18} /></div>
         <h1 className="text-[20px] font-semibold tracking-tight">Sign in</h1>
         <p className="mt-1.5 text-[14px] muted">
           {sso ? `Use your organization account through ${OIDC.providerName}.` : "Paste an access token from your identity provider."}{" "}

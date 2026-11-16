@@ -150,7 +150,7 @@ def create_app(cfg: Config) -> FastAPI:
         return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Dev sign-in</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>{_CSS}</style></head><body><main>
-<h1>Sign in to AegisTrace</h1><p>Tenant <code>{html.escape(cfg.tenant_id)}</code></p>
+<h1>Sign in to Aegis</h1><p>Tenant <code>{html.escape(cfg.tenant_id)}</code></p>
 <div class="warn">Development identity provider. In production this is your company's sign-in.</div>
 <form method="post" action="/authorize">{hidden}{buttons}</form></main></body></html>"""
 

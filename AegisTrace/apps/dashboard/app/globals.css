@@ -103,3 +103,9 @@ table.tbl tbody tr:last-child td { border-bottom: none; }
 .seg button:hover { color: var(--text); }
 .refetching { opacity: 0.55; transition: opacity 200ms; }
 h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; }
+
+/* Aegis wordmark (components/Logo.tsx) */
+.aegis-logo { display: inline-flex; align-items: baseline; gap: 0.32em; font-weight: 600; letter-spacing: -0.025em; line-height: 1; color: var(--text); }
+.aegis-logo-product { font-weight: 500; color: var(--muted); letter-spacing: -0.015em; }
+.aegis-product { letter-spacing: -0.02em; }
+.aegis-product-prefix { color: var(--muted); }

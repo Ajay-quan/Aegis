@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { useLive } from "@/lib/client";
 import { AboutDialog } from "./AboutDialog";
 import { CommandPalette } from "./CommandPalette";
+import { Logo } from "./Logo";
 import { Toaster } from "./ui";
 
 export const I = {
@@ -44,12 +45,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <a href="#main" className="sr-only focus:not-sr-only">Skip to content</a>
       <nav aria-label="Primary" className="hidden md:flex w-[236px] shrink-0 flex-col border-r hairline px-3 py-4 sticky top-0 h-screen">
         <div className="mb-6 flex items-center px-2">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="grid h-6 w-6 place-items-center rounded-md" style={{ background: "var(--green-bg)", border: "1px solid rgba(62,207,142,.35)" }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2.5"><path d={I.agents} /></svg>
-          </span>
-          <span className="text-[15px] font-semibold tracking-tight">AegisTrace</span>
-        </Link>
+        <Logo href="/" product="Studio" size={15} />
         <button onClick={() => window.dispatchEvent(new Event("open-about"))} title="Guide (⌘I)" aria-label="Open guide"
                 className="ml-auto grid h-7 w-7 place-items-center rounded-md muted transition-colors hover:bg-[var(--hover)] hover:text-[var(--text)]">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
