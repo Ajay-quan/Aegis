@@ -2502,6 +2502,23 @@ select {
   font-weight: 600;
 }
 
+.nvx-form-single {
+  grid-template-columns: 1fr;
+}
+
+.nvx-form-single a {
+  display: flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  background: var(--nvx-blue);
+  color: #f7f5ef;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.nvx-form-single a:hover,
 .nvx-form button:hover {
   background: var(--nvx-green);
   color: var(--nvx-blue);
