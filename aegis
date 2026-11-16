@@ -34,7 +34,7 @@ case "${1:-help}" in
     bootstrap
     docker compose up -d --build --wait
     echo; echo "Aegis is running."
-    echo "  Dashboard  http://localhost:3000   (sign in with: ./aegis token)"
+    echo "  Dashboard  http://localhost:3000   (click Sign in; dev users: admin, auditor)"
     echo "  API        http://localhost:8000/docs"
     echo "  Demo data  ./aegis demo"
     ;;
@@ -46,10 +46,13 @@ case "${1:-help}" in
     pyenv
     COMPOSE_PROJECT_NAME=aegis bash "$T/scripts/test_db.sh" >/dev/null
     echo "== AegisTrace (Python)";  (cd "$T" && uv run pytest -q)
-    echo "== AegisTrace dashboard"; (cd "$T/apps/dashboard" && AEGIS_TOKEN="$("$0" token)" npx playwright test)
+    tok="$("$0" token)"; [ -n "$tok" ] || { echo "no dev token: run ./aegis up first"; exit 1; }
+    echo "== AegisTrace dashboard"; (cd "$T/apps/dashboard" && npm run build >/dev/null && AEGIS_TOKEN="$tok" \
+      AEGIS_TEST_OIDC_DISCOVERY=http://localhost:9000/.well-known/openid-configuration npx playwright test --reporter=list \
+      | tee /dev/stderr | { ! grep -qE "^ +[0-9]+ skipped"; })  # a skipped browser test means the stack is not wired; fail
     echo "== AegisMem extension";   (cd AegisMem/extension && npm test --silent)
     ;;
-  token) python3 -c 'import json;print(json.load(open("AegisTrace/.dev/tokens.json"))["user"])' ;;
+  token) python3 -c "import json;print(json.load(open('$PWD/$T/.dev/tokens.json'))['user'])" ;;
   open) open http://localhost:3000 2>/dev/null || xdg-open http://localhost:3000 ;;
   down) shift; docker compose down "$@" ;;
   *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' ;;

@@ -9,17 +9,22 @@ const api = new AegisClient({ baseUrl: process.env.AEGIS_API_URL ?? "http://127.
 
 test.skip(!token, "AEGIS_TOKEN not set");
 
-async function login(page: import("@playwright/test").Page) {
+const sso = !!process.env.AEGIS_TEST_OIDC_DISCOVERY;
+
+async function fillToken(page: import("@playwright/test").Page, value: string) {
   await page.goto("/login");
-  await page.getByLabel("Access token").fill(token);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  if (sso) await page.getByText("Use an access token instead").click();
+  await page.getByLabel("Access token").fill(value);
+  await page.getByRole("button", { name: "Sign in with token" }).click();
+}
+
+async function login(page: import("@playwright/test").Page) {
+  await fillToken(page, token);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
 test("rejects a bad token and does not expose the token to scripts", async ({ page, context }) => {
-  await page.goto("/login");
-  await page.getByLabel("Access token").fill("not-a-token");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await fillToken(page, "not-a-token");
   await expect(page.getByText("Token rejected by the API.")).toBeVisible();
   // The browser can only reach allowlisted routes through the proxy.
   expect((await page.request.get("/api/aegis/v1/admin/anything")).status()).toBe(403);
@@ -131,4 +136,42 @@ test("memory page: clicking a subject shows what is stored and which run wrote i
   await expect(page.getByText("Prefers invoices in EUR")).toBeVisible();
   await page.getByRole("link", { name: /^from run_/ }).first().click();
   await expect(page).toHaveURL(new RegExp(`/runs/${id}`));
+});
+
+test.describe("single sign-on (OIDC authorization code + PKCE)", () => {
+  test.skip(!sso, "AEGIS_TEST_OIDC_DISCOVERY not set");
+
+  test("signs in through the identity provider, with the right access per user", async ({ page, context }) => {
+    await page.goto("/login");
+    await page.getByRole("link", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Sign in to AegisTrace" })).toBeVisible();
+    await page.getByRole("button", { name: /Dev admin/ }).click();
+    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+    const cookie = (await context.cookies()).find((c) => c.name === "aegis_token");
+    expect(cookie?.httpOnly).toBe(true);
+    expect((await context.cookies()).some((c) => c.name === "aegis_oidc" && c.value)).toBe(false);  // flow cookie cleared
+
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("link", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: /Dev auditor/ }).click();
+    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+    // The auditor token lacks payloads:read, so memory content is refused by the API.
+    expect((await page.request.get("/api/aegis/v1/memory/acme")).status()).toBe(403);
+  });
+
+  test("rejects a callback that this browser did not start", async ({ page }) => {
+    await page.goto("/auth/callback?code=stolen&state=" + "x".repeat(43));
+    await expect(page.getByText("The sign-in took too long or was started in another browser")).toBeVisible();
+  });
+
+  test("rejects a forged state", async ({ page, context }) => {
+    await page.goto("/login");
+    // Start a real flow, then come back with a different state than the one this browser holds.
+    const r = await page.request.get("/auth/login", { maxRedirects: 0 });
+    const authorize = new URL(r.headers()["location"]);
+    expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
+    await page.goto(`/auth/callback?code=abc&state=${"y".repeat(43)}`);
+    await expect(page.getByText("state mismatch")).toBeVisible();
+    expect((await context.cookies()).some((c) => c.name === "aegis_token")).toBe(false);
+  });
 });

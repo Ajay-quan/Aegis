@@ -715,3 +715,14 @@ The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its
   4. iCloud kept hiding or duplicating the venv's `.pth` files, so imports failed. The env now lives in `.venv.nosync` with a `.venv` symlink; the launcher sets this up.
 - Verified on the combined stack: AegisTrace pytest all pass; dashboard Playwright 5/5; extension 22/22; live contract test incl. browse. mypy --strict is now fully clean (56 files).
 - Push to GitHub was blocked by the session's permission check; commits are local, awaiting the owner's go-ahead.
+
+## Session 19 — 2026-11-16: Real sign-in for the dashboard (OIDC + PKCE)
+
+- Pushed sessions 17–18 to GitHub `main` (fast-forward, bf75790 → 65efeda).
+- **Dashboard sign-in:** authorization code + PKCE (S256) against any OIDC provider (`/auth/login`, `/auth/callback`). State is compared in constant time; the flow cookie is httpOnly, SameSite=Lax, scoped to `/auth` and expires after 10 minutes. The access token is accepted only if the API accepts it, then kept in the existing httpOnly SameSite=Strict session cookie. Token paste is still available as a fallback and can be disabled (`AEGIS_DASHBOARD_TOKEN_LOGIN=0`). Guide: `AegisTrace/docs/operations/SSO.md` (claims the provider must issue, config, provider notes).
+- **Dev identity provider** (`aegistrace-dev-idp`, compose service `dev-idp` on 127.0.0.1:9000): two users (admin, read-only auditor), exact redirect allowlist, PKCE S256 only, single-use 60 s codes, client binding, escaped HTML. 9 security tests.
+- Bugs found by the new browser tests:
+  1. Redirects built from the request URL went to `localhost` while the session cookie belonged to `127.0.0.1`, so the session silently dropped. All redirects now use the configured public origin (`AEGIS_DASHBOARD_URL`), which is also correct behind proxies.
+  2. **`./aegis test` had been silently skipping all dashboard browser tests:** the token lookup ran from the wrong folder and returned empty. Fixed, and a skipped browser test now fails the run. Earlier claims that "dashboard tests pass via ./aegis test" were therefore wrong for that command (they had passed when run directly).
+- Verified with `./aegis test`: AegisTrace pytest all pass, dashboard Playwright 8/8 (3 new SSO tests: real sign-in as admin and auditor, the auditor is refused memory content, a callback this browser didn't start is rejected, a forged state is rejected), extension 22/22. ruff and mypy --strict clean (57 files).
+- Declared `python-multipart` explicitly; it had only arrived transitively via `mcp`.

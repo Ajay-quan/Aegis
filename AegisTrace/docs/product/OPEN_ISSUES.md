@@ -17,7 +17,7 @@
 11. ~~Token revocation~~ Done: `POST /v1/auth/logout`; jti denylist in Redis; fails closed if Redis is unreachable.
 12. The OpenAI-compatible adapter is tested only against fake transports, never against a live provider.
 13. LangGraph integration adapter (optional in the directive).
-14. Interactive OIDC login for the dashboard (it currently accepts a pasted token).
+14. ~~Interactive OIDC login~~ Done: authorization code + PKCE against any OIDC provider (docs/operations/SSO.md); dev provider for local use; token paste can be disabled.
 
 ## Hardening
 15. DNS-rebinding TOCTOU in `egress.py`. Production needs an egress proxy that pins resolved IPs.

@@ -59,11 +59,34 @@ services:
     depends_on:
       aegismem-migrate: {condition: service_completed_successfully}
 
+  # Development identity provider, so the dashboard's real sign-in (OIDC code +
+  # PKCE) works locally. In production, point the dashboard at your company's
+  # provider instead (AEGIS_OIDC_DISCOVERY_URL) and drop this service.
+  dev-idp:
+    build: {context: AegisTrace, dockerfile: infra/docker/Dockerfile}
+    command: ["aegistrace-dev-idp"]
+    environment:
+      AEGIS_DEV_IDP_KEYS: /run/aegis
+      AEGIS_DEV_IDP_PUBLIC_URL: http://localhost:9000
+      AEGIS_DEV_IDP_REDIRECT_URIS: http://localhost:3000/auth/callback,http://127.0.0.1:3100/auth/callback
+    volumes: ["./AegisTrace/.dev/secrets:/run/aegis:ro"]
+    ports: ["127.0.0.1:9000:9000"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:9000/jwks')"]
+      interval: 3s
+      retries: 20
+
   dashboard:
     build: {context: AegisTrace, dockerfile: apps/dashboard/Dockerfile}
     environment:
       AEGIS_API_URL: http://api:8000
       AEGIS_DASHBOARD_HTTP: "1"
+      AEGIS_DASHBOARD_URL: http://localhost:3000
+      AEGIS_OIDC_DISCOVERY_URL: http://dev-idp:9000/.well-known/openid-configuration
+      AEGIS_OIDC_PROVIDER_NAME: the dev identity provider
     ports: ["127.0.0.1:3000:3000"]
     read_only: true
     tmpfs: ["/tmp"]
@@ -71,6 +94,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     depends_on:
       api: {condition: service_healthy}
+      dev-idp: {condition: service_healthy}
 
 volumes:
   aegismem_pg:

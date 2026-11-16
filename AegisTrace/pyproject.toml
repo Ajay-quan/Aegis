@@ -16,6 +16,7 @@ dependencies = [
     "redis>=5",
     "sqlalchemy>=2.0",
     "uvicorn>=0.54.0",
+    "python-multipart>=0.0.20",  # form posts (dev identity provider)
     "aegistrace-sdk",
     "mcp>=1.20",
     "jsonschema>=4.23",
@@ -27,6 +28,7 @@ aegistrace-verify = "aegistrace.evidence.cli:main"
 aegistrace-worker = "aegistrace.workers.main:worker_main"
 aegistrace-dispatcher = "aegistrace.workers.main:dispatcher_main"
 aegistrace = "aegistrace.cli.main:main"
+aegistrace-dev-idp = "aegistrace.identity.devidp:main"
 
 [dependency-groups]
 dev = [
