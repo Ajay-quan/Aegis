@@ -325,3 +325,22 @@ test("model hub: register a model and test its connection", async ({ page }) => 
   await expect(row.getByText("connected", { exact: true })).toBeVisible();
   await expect(row.getByText(/agents can run on it/)).toBeVisible();
 });
+
+test("agent builder: create an agent, give it instructions, save a version, run it", async ({ page }) => {
+  const name = `pw-builder-${Date.now()}`;
+  await login(page);
+  await page.goto("/agents");
+  await page.locator("#new-agent-name").fill(name);
+  await page.getByRole("button", { name: "Create agent" }).click();
+  await expect(page.locator("#agent-name")).toHaveValue(name);  // the builder has switched to the new agent
+  await page.locator("#agent-instructions").fill("Summarize in one sentence.");
+  await page.locator("#agent-note").fill("first instructions");
+  await page.getByRole("button", { name: "Save new version" }).click();
+  await expect(page.getByText("version 2")).toBeVisible();
+  await expect(page.getByText("first instructions")).toBeVisible();
+  await page.locator("#agent-task").fill("Say hello");
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page.getByRole("link", { name: /Open run/ }).click();
+  await expect(page).toHaveURL(/\/runs\/run_/);
+  await expect(page.getByText("succeeded").first()).toBeVisible({ timeout: 20_000 });
+});

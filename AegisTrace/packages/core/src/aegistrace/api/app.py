@@ -37,6 +37,7 @@ from aegistrace.identity import apikeys, members
 from aegistrace.identity.jwt import AuthError, JwksCache, Principal, TokenValidator
 from aegistrace.orchestration import service as runs
 from aegistrace.orchestration.states import TERMINAL, IllegalTransition, RunState
+from aegistrace.persistence import agents as agents_mod
 from aegistrace.persistence import erasure, sealing
 from aegistrace.persistence import usage as model_usage
 from aegistrace.persistence.audit import audit
@@ -68,6 +69,19 @@ class AgentIn(Strict):
     # "registry": model_id is a Model Hub registration id (mdl_...)
     model_provider: str = Field(default="mock", pattern=r"^(mock|openai-compatible|registry)$")
     model_id: str = Field(default="mock-deterministic-1", max_length=100)
+    instructions: str = Field(default="", max_length=8000)
+    max_steps: int = Field(default=20, ge=1, le=50)
+    memory_enabled: bool = False
+
+
+class AgentUpdate(Strict):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    model_provider: str | None = Field(default=None, pattern=r"^(mock|openai-compatible|registry)$")
+    model_id: str | None = Field(default=None, max_length=100)
+    instructions: str | None = Field(default=None, max_length=8000)
+    max_steps: int | None = Field(default=None, ge=1, le=50)
+    memory_enabled: bool | None = None
+    note: str | None = Field(default=None, max_length=300)
 
 
 class GrantIn(Strict):
@@ -351,7 +365,19 @@ def create_app(deps: Deps) -> FastAPI:
 
         try:
             with tenant_tx(deps.engine, p.tenant_id) as c:
+                if body.memory_enabled and not p.has("policies:write"):
+                    raise HTTPException(403, "turning memory on grants tools and needs policies:write")
                 aid = mk(c, p.tenant_id, body.project_id, body.name, body.model_provider, body.model_id)
+                c.execute(
+                    text("UPDATE agents SET instructions = :i, max_steps = :m WHERE id = :a"),
+                    {"i": body.instructions, "m": body.max_steps, "a": aid},
+                )
+                if body.memory_enabled:
+                    agents_mod.update(c, p.tenant_id, aid, {"memory_enabled": True}, p.subject, "created with memory")
+                else:
+                    created = agents_mod.get(c, aid)
+                    assert created is not None
+                    agents_mod.record_version(c, p.tenant_id, created, p.subject, "created")
                 audit(
                     c,
                     p.tenant_id,
@@ -364,11 +390,50 @@ def create_app(deps: Deps) -> FastAPI:
             raise HTTPException(409, "agent already exists or project not found") from exc
         return {"id": aid, **body.model_dump()}
 
+    @app.get("/v1/projects")
+    def list_projects(p: Principal = scoped("agents:read")) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            rows = c.execute(text("SELECT id, name, created_at FROM projects ORDER BY created_at")).mappings().all()
+        return {"items": [dict(r) for r in rows]}
+
+    @app.get("/v1/agents/{agent_id}")
+    def get_agent(agent_id: str, p: Principal = scoped("agents:read")) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            a = agents_mod.get(c, agent_id)
+        if a is None:
+            raise HTTPException(404, "agent not found")
+        return a
+
+    @app.put("/v1/agents/{agent_id}")
+    def update_agent(agent_id: str, body: AgentUpdate, p: Principal = scoped("agents:write")) -> dict[str, Any]:
+        """Saves a new version. Turning memory on or off changes tool grants, so it also needs policies:write."""
+        if body.memory_enabled is not None and not p.has("policies:write"):
+            raise HTTPException(403, "turning memory on or off changes permissions and needs policies:write")
+        try:
+            with tenant_tx(deps.engine, p.tenant_id) as c:
+                return agents_mod.update(
+                    c, p.tenant_id, agent_id, body.model_dump(exclude={"note"}), p.subject, body.note
+                )
+        except LookupError as exc:
+            raise HTTPException(404, "agent not found") from exc
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/v1/agents/{agent_id}/versions")
+    def agent_versions(agent_id: str, p: Principal = scoped("agents:read")) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            return {"items": agents_mod.versions(c, agent_id)}
+
     @app.get("/v1/agents")
     def list_agents(p: Principal = scoped("agents:read")) -> dict[str, Any]:
         with tenant_tx(deps.engine, p.tenant_id) as c:
             rows = (
-                c.execute(text("SELECT id, project_id, name, model_provider, model_id FROM agents ORDER BY created_at"))
+                c.execute(
+                    text(
+                        "SELECT id, project_id, name, model_provider, model_id, memory_enabled, version, updated_at "
+                        "FROM agents ORDER BY created_at"
+                    )
+                )
                 .mappings()
                 .all()
             )

@@ -3,6 +3,7 @@
 // Copyright 2026 AegisTrace contributors
 import { useEffect, useState } from "react";
 import { api, toast, useLive } from "@/lib/client";
+import { AgentBuilder, NewAgent } from "@/components/AgentBuilder";
 import { RISK, type Agent } from "@/lib/types";
 import { Badge, Empty, PageHeader, Panel, Skeleton } from "@/components/ui";
 
@@ -63,9 +64,10 @@ export default function Agents() {
   const simTone = sim?.result === "allow" ? "var(--green)" : sim?.result === "deny" ? "var(--red)" : "var(--text)";
   return (
     <>
-      <PageHeader title="Agents & permissions" subtitle="Choose which tools each agent may use. Anything not listed here is blocked automatically." />
+      <PageHeader title="Agents" subtitle="Build agents, choose their model and instructions, and decide which tools each may use. Anything not granted is blocked." />
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         <Panel title="Agents">
+          <NewAgent onCreated={(id) => { agents.reload(); setSel(id); setSim(null); }} />
           {!agents.data ? <Skeleton /> : agents.data.items.length === 0 ? <Empty>No agents.</Empty> : (
             <ul className="p-1.5">
               {agents.data.items.map((a) => (
@@ -83,6 +85,7 @@ export default function Agents() {
         </Panel>
 
         <div className="space-y-4 min-w-0">
+          {agentId ? <AgentBuilder key={agentId} agentId={agentId} onSaved={() => { agents.reload(); grants.reload(); }} /> : null}
           <Panel title="Tool grants" actions={<span className="text-[12.5px] muted">default deny — anything not listed is blocked</span>}>
             {!grants.data ? <Skeleton rows={3} /> : (
               <table className="tbl">

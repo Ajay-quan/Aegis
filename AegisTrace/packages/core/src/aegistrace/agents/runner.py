@@ -54,9 +54,9 @@ def run_agent(
 ) -> RunState:
     me = Actor(worker_id, "worker")
     with tenant_tx(engine, tenant_id) as c:
-        agent_id, provider, model_id, run_input = c.execute(
+        agent_id, provider, model_id, run_input, instructions, max_steps = c.execute(
             text(
-                "SELECT r.agent_id, a.model_provider, a.model_id, r.input FROM runs r "
+                "SELECT r.agent_id, a.model_provider, a.model_id, r.input, a.instructions, a.max_steps FROM runs r "
                 "JOIN agents a ON a.id = r.agent_id WHERE r.id = :r"
             ),
             {"r": lease.run_id},
@@ -95,7 +95,10 @@ def run_agent(
     else:
         model = model_factory(provider, model_id, run_input)
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT + (f"\n\nAgent instructions:\n{instructions}" if instructions else ""),
+        },
         {"role": "user", "content": json.dumps({"task": run_input.get("task", "")})},
     ]
 
@@ -107,7 +110,7 @@ def run_agent(
     if model is None:  # a configuration problem, not a transient fault: fail now with the reason
         return finish(RunState.FAILED, {"reason": "model_unavailable", "result": {"error": unavailable or "no model"}})
 
-    for step in range(MAX_STEPS):
+    for step in range(min(MAX_STEPS, max_steps)):
         with tenant_tx(engine, tenant_id) as c:
             heartbeat(c, lease, ttl)
         resp = recorded.get(step)
