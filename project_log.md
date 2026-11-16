@@ -817,3 +817,12 @@ Still open, and not doable from this laptop: an independent security review; an 
 - **Typography system:** one scale (display 46–84, h2 34–56, h3 24–32, statement 30–50, lead 18–21, body 17, small 14, micro 11.5 mono), one section rhythm and one 1160 px column. Section heads are split (title left, intro right, baseline-aligned). The nav underlines the current section.
 - Checked at 390, 900 and 1440 px: no errors, no horizontal scroll. Playwright 10/10.
 - Not built (from the plan's sitemap): /platform, /products, /playground, /docs, /integrations, /architecture, /research and /changelog pages; Studio sections Agent Builder, Model Hub, Evaluation Lab, Optimization Center and Deployment Center.
+
+## Session 25 — 2026-11-16: The whole platform plan on the homepage
+
+New homepage sections, each item explained in one line with an honest status:
+- **Aegis Studio**: all 10 workspace sections. Built: Overview, Trace Viewer, Security Center. In progress: Memory Explorer (browse, no editing or graph yet), Deployment Center (service health only). Planned: Agent Builder, Model Hub, Evaluation Lab, Optimization Center, Settings and API keys.
+- **Underneath every pillar**: verifiable execution, MCP security gateway, execution replay, multi-tenancy, SDKs and APIs (all built).
+- **Integrations**: all 12 categories from the plan, with Available or Planned per item (Hugging Face is available for embeddings via AegisMem).
+- **Coming to this site**: the 8 planned pages, plus Open source linking to GitHub.
+- The nav gained "Studio". Checked at 390 and 1440 px; Playwright 10/10.

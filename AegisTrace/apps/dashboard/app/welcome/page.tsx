@@ -67,11 +67,59 @@ const ROADMAP: { when: string; title: string; products: string[]; body: string; 
   { when: "Later", title: "The full harness", products: ["Runtime", "Eval", "Optimize", "Models"], body: "Orchestration, evaluation, efficiency and local model management, each usable on its own.", state: "Planned" },
 ];
 
-const INTEGRATIONS: { group: string; available: string[]; planned: string[] }[] = [
-  { group: "Models", available: ["OpenAI-compatible APIs", "Anthropic", "Ollama"], planned: ["Google Gemini", "vLLM", "llama.cpp", "Hugging Face"] },
-  { group: "Agents and tools", available: ["MCP", "LangChain", "LangGraph"], planned: ["PEFT", "LoRA", "QLoRA", "TRL"] },
-  { group: "Data", available: ["PostgreSQL", "Qdrant", "Neo4j", "Redis"], planned: [] },
-  { group: "Platform", available: ["OpenTelemetry", "Single sign-on (OIDC)", "Docker", "Python SDK", "TypeScript SDK"], planned: ["AWS"] },
+// Aegis Studio, the developer workspace. Statuses reflect the dashboard as it exists today.
+const STUDIO: { group: string; items: [string, string, Status][] }[] = [
+  { group: "Workspace", items: [
+    ["Overview", "Health, active agents, run volume, latency and what needs you.", "Built"],
+    ["Agent Builder", "Create agents, connect models and tools, define workflows.", "Planned"],
+    ["Memory Explorer", "Search and inspect what agents remember, and where it came from.", "In progress"],
+    ["Trace Viewer", "Every step of a run, with timings and verifiable evidence.", "Built"],
+    ["Model Hub", "Register hosted models, open-source LLMs and local SLMs.", "Planned"],
+  ] },
+  { group: "Operations", items: [
+    ["Security Center", "Permissions, rules, approvals, erasures and the audit trail.", "Built"],
+    ["Evaluation Lab", "Test suites, comparisons, failure cases and regressions.", "Planned"],
+    ["Optimization Center", "Context use, model cost and calls you can cut.", "Planned"],
+    ["Deployment Center", "Environments, runtime settings and service health.", "In progress"],
+    ["Settings and API keys", "Organizations, workspaces, credentials and webhooks.", "Planned"],
+  ] },
+];
+
+// Capabilities that run underneath every pillar.
+const CAPABILITIES: [string, string, Status][] = [
+  ["Verifiable execution", "Signed receipts for every run. Any change to the record is detected.", "Built"],
+  ["MCP security gateway", "Every tool an agent reaches through MCP is inspected, authorized and recorded.", "Built"],
+  ["Execution replay", "Rebuild a past run to debug it, without repeating a single side effect.", "Built"],
+  ["Multi-tenancy", "Organizations, agents, memories, keys and records sealed from one another.", "Built"],
+  ["SDKs and APIs", "Use any pillar on its own, from Python, TypeScript or plain REST.", "Built"],
+];
+
+// Integrations, grouped as in the platform plan. Available means it works in the code today.
+const INTEGRATIONS: { group: string; items: [string, boolean][] }[] = [
+  { group: "LLM providers", items: [["OpenAI and compatible APIs", true], ["Anthropic", true], ["Google Gemini", false]] },
+  { group: "Local inference", items: [["Ollama", true], ["llama.cpp", false], ["vLLM", false]] },
+  { group: "Model ecosystem", items: [["Hugging Face models for embeddings", true], ["Hugging Face Transformers", false]] },
+  { group: "Model adaptation", items: [["PEFT", false], ["LoRA", false], ["QLoRA", false], ["TRL", false]] },
+  { group: "Agent frameworks", items: [["LangGraph", true], ["LangChain", true], ["Custom agents", true]] },
+  { group: "Tool protocol", items: [["MCP, local and remote", true]] },
+  { group: "Databases", items: [["PostgreSQL", true], ["Qdrant", true], ["Neo4j", true]] },
+  { group: "Caching", items: [["Redis", true]] },
+  { group: "Backend", items: [["Python", true], ["FastAPI", true], ["REST APIs", true]] },
+  { group: "Cloud and deployment", items: [["Docker", true], ["AWS EC2, EBS and S3", false], ["Nginx", false]] },
+  { group: "Developer interfaces", items: [["Python SDK", true], ["TypeScript SDK", true]] },
+  { group: "Engineering", items: [["GitHub", true], ["CI/CD", true], ["Automated testing", true]] },
+];
+
+// The complete website, as planned. Only this introduction exists today.
+const SITE: [string, string][] = [
+  ["Platform", "How the whole harness works, end to end."],
+  ["Products", "A page for each of the eight pillars."],
+  ["Playground", "Try workflows, memory queries, models and tracing."],
+  ["Documentation", "Installation, API reference, SDKs and examples."],
+  ["Integrations", "Providers, frameworks, databases and tools."],
+  ["Architecture", "Diagrams, data flow and security boundaries."],
+  ["Research", "AegisMem research, benchmarks and findings."],
+  ["Changelog", "Releases, features and fixes."],
 ];
 
 const FLOWS = [
@@ -88,7 +136,7 @@ const PROOF = [
   ["249", "automated tests", "unit, security, end-to-end and browser, all passing"],
 ] as const;
 
-const SECTIONS = [["harness", "Harness"], ["pillars", "Pillars"], ["roadmap", "Roadmap"], ["integrations", "Integrations"]] as const;
+const SECTIONS = [["harness", "Harness"], ["pillars", "Pillars"], ["studio", "Studio"], ["roadmap", "Roadmap"], ["integrations", "Integrations"]] as const;
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -300,6 +348,39 @@ export default function Welcome() {
 
         <Pillars />
 
+        <section id="studio" className="w-section">
+          <SectionHead eyebrow="Aegis Studio" title="The workspace where it all comes together."
+                       intro="One control center to build agents, explore memory, inspect traces and run the platform." />
+          <div className="w-studio">
+            {STUDIO.map((g) => (
+              <div key={g.group} className="w-list-group" data-reveal>
+                <p className="w-list-name">{g.group}</p>
+                <ul className="w-rows">
+                  {g.items.map(([name, desc, status]) => (
+                    <li key={name}>
+                      <div><p className="w-row-title">{name}</p><p className="w-row-desc">{desc}</p></div>
+                      <em data-status={status}>{status}</em>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="capabilities" className="w-section">
+          <SectionHead eyebrow="Underneath every pillar" title="The guarantees that hold it together." />
+          <ul className="w-caps">
+            {CAPABILITIES.map(([name, desc, status]) => (
+              <li key={name} data-reveal>
+                <p className="w-row-title">{name}</p>
+                <p className="w-row-desc">{desc}</p>
+                <em data-status={status}>{status}</em>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section id="roadmap" className="w-section">
           <SectionHead eyebrow="Roadmap" title="Built in the order that earns trust."
                        intro="Memory and evidence come first, because everything else depends on them." />
@@ -336,12 +417,30 @@ export default function Welcome() {
               <div key={g.group} className="w-int-group">
                 <p className="w-int-name">{g.group}</p>
                 <ul>
-                  {g.available.map((x) => <li key={x}>{x}</li>)}
-                  {g.planned.map((x) => <li key={x} className="w-int-planned">{x}<em>Planned</em></li>)}
+                  {g.items.map(([x, ok]) => (
+                    <li key={x} className={ok ? undefined : "w-int-planned"}>{x}{ok ? null : <em>Planned</em>}</li>
+                  ))}
                 </ul>
               </div>
             ))}
           </div>
+        </section>
+
+        <section id="site" className="w-section">
+          <SectionHead eyebrow="Coming to this site" title="Everything Aegis will offer."
+                       intro="This introduction is the first page. The rest of the site follows the same plan." />
+          <ul className="w-site" data-reveal>
+            {SITE.map(([name, desc]) => (
+              <li key={name}>
+                <div className="w-site-top"><p className="w-row-title">{name}</p><em>Coming</em></div>
+                <p className="w-row-desc">{desc}</p>
+              </li>
+            ))}
+            <li className="w-site-live">
+              <div className="w-site-top"><p className="w-row-title">Open source</p><a href="https://github.com/Ajay-quan/Aegis">GitHub</a></div>
+              <p className="w-row-desc">Code, contribution guides and examples.</p>
+            </li>
+          </ul>
         </section>
 
         <section className="w-close" data-reveal>
