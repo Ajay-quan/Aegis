@@ -7,6 +7,35 @@ import { timeAgo, useLive } from "@/lib/client";
 import type { Decision } from "@/lib/types";
 import { Badge, Empty, LiveIndicator, PageHeader, Panel, Skeleton, Stat } from "@/components/ui";
 
+interface Erasure { id: string; scope: string; run_ids: string[]; actor_id: string; reason: string; created_at: string }
+
+function Erasures() {
+  const live = useLive<{ items: Erasure[] }>("v1/erasures?limit=20", 15000);
+  const items = live.data?.items ?? [];
+  return (
+    <Panel className="mt-4" title="Privacy erasures">
+      {!live.data ? <Skeleton rows={2} /> : items.length === 0 ? <Empty>No content has been erased. Erase a finished run from its page, or set a retention period in Rules.</Empty> : (
+        <div className="overflow-x-auto">
+          <table className="tbl">
+            <thead><tr><th>When</th><th>Scope</th><th>Runs</th><th>By</th><th>Reason</th></tr></thead>
+            <tbody>
+              {items.map((e) => (
+                <tr key={e.id}>
+                  <td className="muted whitespace-nowrap">{timeAgo(e.created_at)}</td>
+                  <td>{e.scope}</td>
+                  <td className="mono">{e.run_ids.length === 1 ? <Link href={`/runs/${e.run_ids[0]}`} className="hover:text-[var(--text)]">{e.run_ids[0].slice(0, 14)}…</Link> : `${e.run_ids.length} runs`}</td>
+                  <td className="mono muted">{e.actor_id}</td>
+                  <td className="text-2">{e.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 export default function Security() {
   const [filter, setFilter] = useState("deny");
   const live = useLive<{ items: Decision[] }>(`v1/policy-decisions?limit=300${filter === "all" ? "" : `&decision=${filter}`}`, 3000);
@@ -66,6 +95,7 @@ export default function Security() {
           </div>
         )}
       </Panel>
+      <Erasures />
     </>
   );
 }

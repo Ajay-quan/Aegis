@@ -32,6 +32,7 @@ ALL_SCOPES = [
     "replay:read",
     "replay:fork",
     "payloads:read",
+    "data:erase",
     "audit:read",
 ]
 

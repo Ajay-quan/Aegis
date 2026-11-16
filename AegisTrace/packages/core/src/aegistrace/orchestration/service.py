@@ -17,6 +17,7 @@ from aegistrace.evidence.canonical import canonicalize
 from aegistrace.evidence.checkpoint import CheckpointBody, sign_checkpoint
 from aegistrace.evidence.events import Event, SealedEvent, genesis_hash, payload_digest
 from aegistrace.evidence.signing import Signer
+from aegistrace.persistence import sealing
 
 from .states import OPERATOR_ONLY, TERMINAL, RunState, check_transition
 
@@ -132,7 +133,14 @@ def _append_event(
             "s": ev.sequence_number,
             "ty": event_type,
             "h": sealed.current_event_hash,
-            "rec": canonicalize(sealed.to_record()).decode(),
+            "rec": canonicalize(
+                {
+                    **sealed.to_record(),
+                    "payload": sealing.seal_event_payload(conn, run.tenant_id, run.id, ev.event_id, payload),
+                }
+                if payload is not None
+                else sealed.to_record()
+            ).decode(),
         },
     )
     run.last_sequence = ev.sequence_number
@@ -195,7 +203,9 @@ def transition(
         run.lease_owner = None
     if target in TERMINAL and payload is not None and "result" in payload:
         sql += ", result = CAST(:res AS jsonb)"
-        params["res"] = json.dumps(payload["result"])
+        params["res"] = json.dumps(
+            sealing.seal_value(conn, run.tenant_id, run.id, f"run:{run.id}:result", payload["result"])
+        )
     conn.execute(text(sql + " WHERE id = :id"), params)
     _append_event(conn, run, "run.state_changed", actor, {"from": prev.value, "to": target.value, **(payload or {})})
     if target is RunState.QUEUED:
@@ -272,7 +282,7 @@ def create_run(
             "t": tenant_id,
             "p": agent[0],
             "a": agent_id,
-            "in": json.dumps(run_input),
+            "in": json.dumps(sealing.seal_value(conn, tenant_id, run_id, f"run:{run_id}:input", run_input)),
             "g": genesis_hash(tenant_id, run_id),
         },
     )
@@ -308,4 +318,4 @@ def load_events(conn: Connection, run_id: str) -> list[dict[str, Any]]:
     rows = conn.execute(
         text("SELECT record FROM events WHERE run_id = :r ORDER BY sequence_number"), {"r": run_id}
     ).all()
-    return [dict(r[0]) for r in rows]
+    return [sealing.open_event_record(conn, dict(r[0])) for r in rows]

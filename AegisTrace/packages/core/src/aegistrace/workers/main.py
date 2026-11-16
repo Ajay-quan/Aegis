@@ -17,6 +17,7 @@ from aegistrace.agents.model import MockModel, ModelAdapter, OpenAICompatibleMod
 from aegistrace.api.logging import configure
 from aegistrace.authorization.policy import OpaPolicyEngine
 from aegistrace.observability import OUTBOX_LAG, QUEUE_DEPTH
+from aegistrace.persistence import erasure, sealing
 from aegistrace.persistence.db import make_engine
 from aegistrace.tools.demo import DemoSink, build_registry
 from aegistrace.tools.gateway import ToolGateway
@@ -47,6 +48,7 @@ def model_factory(provider: str, model_id: str, run_input: dict[str, Any]) -> Mo
 
 def worker_main() -> None:
     configure()
+    sealing.configure_from_env()
     signal.signal(signal.SIGTERM, _on_signal)
     signal.signal(signal.SIGINT, _on_signal)
     start_http_server(int(os.environ.get("AEGIS_METRICS_PORT", "9101")))
@@ -73,7 +75,7 @@ def worker_main() -> None:
         anchor=FileAnchor(anchor_path) if anchor_path else None,
     )
     log.info("worker started", extra={"worker_id": worker.id})
-    last_maint = 0.0
+    last_maint = last_retention = 0.0
     while not _stop:
         try:
             worker.poll_once(block_ms=1000)
@@ -81,6 +83,12 @@ def worker_main() -> None:
                 worker.maintenance()
                 QUEUE_DEPTH.set(r.xpending(STREAM, GROUP)["pending"])
                 last_maint = time.monotonic()
+            if time.monotonic() - last_retention > 300:
+                with engine.begin() as conn:
+                    shredded = erasure.apply_retention(conn)
+                if shredded:
+                    log.info("retention erased run content", extra={"runs": shredded})
+                last_retention = time.monotonic()
         except Exception:
             log.exception("worker loop error")
             time.sleep(1)

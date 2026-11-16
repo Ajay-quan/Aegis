@@ -34,6 +34,7 @@ from aegistrace.evidence.events import payload_digest
 from aegistrace.observability import GATEWAY_OVERHEAD, POLICY_LATENCY, TOOL_DECISIONS, TOOL_EXECUTIONS
 from aegistrace.orchestration.leases import Lease
 from aegistrace.orchestration.service import Actor, new_id, record_event
+from aegistrace.persistence import sealing
 from aegistrace.persistence.db import tenant_tx
 
 from .registry import Classification, ToolContext, ToolRegistry, ToolSpec
@@ -72,7 +73,7 @@ class ToolGateway:
     def _prior_outcome(self, conn: Connection, run_id: str, call_key: str) -> ToolOutcome | None:
         row = conn.execute(
             text(
-                "SELECT event_type, record->'payload' FROM events WHERE run_id = :r "
+                "SELECT event_type, record FROM events WHERE run_id = :r "
                 "AND event_type IN ('tool.execution_succeeded', 'tool.execution_failed') "
                 "AND record->'payload'->>'call_key' = :k ORDER BY sequence_number DESC LIMIT 1"
             ),
@@ -80,9 +81,10 @@ class ToolGateway:
         ).one_or_none()
         if row is None:
             return None
+        payload = sealing.open_event_record(conn, dict(row[1])).get("payload") or {}
         if row[0] == "tool.execution_succeeded":
-            return ToolOutcome("succeeded", "recorded", row[1].get("output"))
-        return ToolOutcome("failed", row[1].get("error", "recorded_failure"))
+            return ToolOutcome("succeeded", "recorded", payload.get("output"))
+        return ToolOutcome("failed", payload.get("error", "recorded_failure"))
 
     @staticmethod
     def _grants(conn: Connection, tenant_id: str, agent_id: str, tool: str) -> list[dict[str, Any]]:

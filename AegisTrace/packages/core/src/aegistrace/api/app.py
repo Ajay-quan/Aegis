@@ -13,6 +13,7 @@ import re
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
 import httpx
@@ -31,6 +32,7 @@ from aegistrace.evidence.signing import Signer, b64
 from aegistrace.identity.jwt import AuthError, JwksCache, Principal, TokenValidator
 from aegistrace.orchestration import service as runs
 from aegistrace.orchestration.states import TERMINAL, IllegalTransition, RunState
+from aegistrace.persistence import erasure, sealing
 from aegistrace.persistence.db import make_engine, tenant_tx
 from aegistrace.replay.engine import reconstruct, replay_decisions
 
@@ -69,6 +71,20 @@ class GrantIn(Strict):
 class RunIn(Strict):
     agent_id: str = Field(pattern=ID)
     input: dict[str, Any]
+
+
+class EraseIn(Strict):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class EraseAllIn(EraseIn):
+    confirm: str  # must equal the caller's tenant id
+    finished_before: datetime | None = None
+
+
+class HoldIn(Strict):
+    hold: bool
+    reason: str = Field(default="", max_length=500)
 
 
 class DecisionIn(Strict):
@@ -516,19 +532,26 @@ def create_app(deps: Deps) -> FastAPI:
                 .mappings()
                 .all()
             )
-        items = [dict(r) for r in rows[:limit]]
+            items = [_open_run(c, p.tenant_id, dict(r)) for r in rows[:limit]]
         return {"items": items, "next_cursor": items[-1]["id"] if len(rows) > limit else None}
 
-    def _get_run(c: Connection, run_id: str) -> dict[str, Any]:
+    def _open_run(c: Connection, tenant_id: str, run: dict[str, Any]) -> dict[str, Any]:
+        try:
+            run["result"] = sealing.open_value(c, tenant_id, run["id"], f"run:{run['id']}:result", run["result"])
+        except sealing.Erased:
+            run["result"], run["erased"] = None, True
+        return run
+
+    def _get_run(c: Connection, run_id: str, tenant_id: str | None = None) -> dict[str, Any]:
         row = c.execute(text(f"SELECT {RUN_COLS} FROM runs WHERE id=:r"), {"r": run_id}).mappings().one_or_none()  # noqa: S608
         if row is None:
             raise HTTPException(404, "run not found")
-        return dict(row)
+        return _open_run(c, tenant_id, dict(row)) if tenant_id else dict(row)  # existence checks need no content
 
     @app.get("/v1/runs/{run_id}")
     def get_run(run_id: str, p: Principal = scoped("runs:read")) -> dict[str, Any]:
         with tenant_tx(deps.engine, p.tenant_id) as c:
-            return _get_run(c, run_id)
+            return _get_run(c, run_id, p.tenant_id)
 
     def _can_see_payloads(p: Principal) -> bool:
         return p.has("payloads:read")
@@ -767,7 +790,11 @@ def create_app(deps: Deps) -> FastAPI:
                 .mappings()
                 .all()
             )
-        return {"items": [dict(r) for r in rows]}
+            items = [
+                {**dict(r), "summary": approvals.open_summary(c, p.tenant_id, r["run_id"], r["id"], r["summary"])}
+                for r in rows
+            ]
+        return {"items": items}
 
     @app.post("/v1/approvals/{approval_id}/decision")
     def decide(approval_id: str, body: DecisionIn, p: Principal = scoped("approvals:decide")) -> dict[str, Any]:
@@ -782,12 +809,84 @@ def create_app(deps: Deps) -> FastAPI:
             raise HTTPException(409, str(exc)) from exc
         return {"id": approval_id, "status": status}
 
+    # -- privacy: erasure (crypto-shredding) and legal hold -------------------------------
+
+    def _refused(exc: erasure.ErasureRefused) -> HTTPException:
+        msg = {
+            "run_not_finished": "only finished runs can be erased",
+            "already_erased": "the run's content was already erased",
+            "stored_without_encryption": "this run was stored before encryption was enabled; it cannot be shredded",
+            "legal_hold": "the run is under legal hold",
+            "no_encrypted_content": "the run has no encrypted content to hold",
+        }[exc.reason]
+        return HTTPException(409, msg)
+
+    @app.post("/v1/runs/{run_id}/erase")
+    def erase_run(run_id: str, body: EraseIn, p: Principal = scoped("data:erase")) -> dict[str, Any]:
+        try:
+            with tenant_tx(deps.engine, p.tenant_id) as c:
+                return erasure.erase_run(c, p.tenant_id, run_id, actor(p), body.reason)
+        except LookupError as exc:
+            raise HTTPException(404, "run not found") from exc
+        except erasure.ErasureRefused as exc:
+            raise _refused(exc) from exc
+
+    @app.post("/v1/data/erase")
+    def erase_tenant_data(body: EraseAllIn, p: Principal = scoped("data:erase")) -> dict[str, Any]:
+        if body.confirm != p.tenant_id:
+            raise HTTPException(422, "set confirm to your tenant id to erase all of its finished runs")
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            return erasure.erase_tenant(c, p.tenant_id, actor(p), body.reason, body.finished_before)
+
+    @app.put("/v1/runs/{run_id}/legal-hold")
+    def legal_hold(run_id: str, body: HoldIn, p: Principal = scoped("data:erase")) -> dict[str, Any]:
+        try:
+            with tenant_tx(deps.engine, p.tenant_id) as c:
+                erasure.set_legal_hold(c, run_id, body.hold)
+        except LookupError as exc:
+            raise HTTPException(404, "run not found") from exc
+        except erasure.ErasureRefused as exc:
+            raise _refused(exc) from exc
+        return {"run_id": run_id, "legal_hold": body.hold}
+
+    @app.get("/v1/erasures")
+    def list_erasures(p: Principal = scoped("audit:read"), limit: int = Query(100, ge=1, le=500)) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            rows = (
+                c.execute(
+                    text(
+                        "SELECT id, scope, run_ids, actor_id, reason, created_at FROM erasures "
+                        "ORDER BY created_at DESC LIMIT :n"
+                    ),
+                    {"n": limit},
+                )
+                .mappings()
+                .all()
+            )
+        return {"items": [dict(r) for r in rows]}
+
+    @app.get("/v1/runs/{run_id}/data-status")
+    def data_status(run_id: str, p: Principal = scoped("runs:read")) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            _get_run(c, run_id)
+            row = c.execute(
+                text("SELECT shredded_at, legal_hold FROM payload_keys WHERE run_id = :r"), {"r": run_id}
+            ).one_or_none()
+        if row is None:
+            return {"encrypted": False, "erased": False, "legal_hold": False, "erased_at": None}
+        return {
+            "encrypted": True,
+            "erased": row[0] is not None,
+            "legal_hold": row[1],
+            "erased_at": row[0].isoformat() if row[0] else None,
+        }
+
     # -- replay ------------------------------------------------------------------------
 
     @app.get("/v1/runs/{run_id}/replay")
     def replay(run_id: str, p: Principal = scoped("replay:read")) -> dict[str, Any]:
         with tenant_tx(deps.engine, p.tenant_id) as c:
-            run = _get_run(c, run_id)
+            run = _get_run(c, run_id, p.tenant_id)
             records = runs.load_events(c, run_id)
         view = reconstruct(records).as_dict()
         decisions = replay_decisions(records)
@@ -817,8 +916,12 @@ def create_app(deps: Deps) -> FastAPI:
                 raise HTTPException(404, "run not found")
             if RunState(src[4]) not in TERMINAL:
                 raise HTTPException(409, "can only fork a finished run")
+            try:
+                src_input = sealing.open_value(c, p.tenant_id, run_id, f"run:{run_id}:input", src[1])
+            except sealing.Erased as exc:
+                raise HTTPException(410, "the run's content was erased; it cannot be forked") from exc
             new_input = {
-                **src[1],
+                **src_input,
                 "forked_from": {"run_id": run_id, "head_hash": src[2], "last_sequence": src[3], "reason": body.reason},
             }
             new_id, created = runs.create_run(c, p.tenant_id, src[0], new_input, actor(p), idempotency_key)
@@ -829,6 +932,7 @@ def create_app(deps: Deps) -> FastAPI:
 
 def build_from_env() -> FastAPI:
     """Entry point for uvicorn: `uvicorn aegistrace.api.app:build_from_env --factory`."""
+    sealing.configure_from_env()  # payload encryption at rest when AEGIS_PAYLOAD_KEK_FILE is set
     from aegistrace.evidence.signing import load_local_signer
 
     from .logging import configure

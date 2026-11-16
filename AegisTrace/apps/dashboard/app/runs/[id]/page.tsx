@@ -187,10 +187,11 @@ export default function RunDetail({ params }: { params: Promise<{ id: string }> 
   const replay = useLive<Replay>(`v1/runs/${id}/replay`, active ? 4000 : 30000);
   const [tab, setTab] = useState<"timeline" | "evidence" | "replay">("timeline");
   const [busy, setBusy] = useState(false);
+  const data = useLive<{ encrypted: boolean; erased: boolean; legal_hold: boolean; erased_at: string | null }>(`v1/runs/${id}/data-status`, 15000);
 
-  async function act(path: string, json: unknown, msg: string) {
+  async function act(path: string, json: unknown, msg: string, method = "POST") {
     setBusy(true);
-    try { await api(path, { method: "POST", json }); toast(msg, "ok"); run.reload(); events.reload(); }
+    try { await api(path, { method, json }); toast(msg, "ok"); run.reload(); events.reload(); data.reload(); }
     catch (e) { toast(e instanceof Error ? e.message : "Action failed", "bad"); }
     finally { setBusy(false); }
   }
@@ -217,6 +218,21 @@ export default function RunDetail({ params }: { params: Promise<{ id: string }> 
           {r && (active || r.state === "WAITING_FOR_APPROVAL") ? (
             <button className="btn btn-red" disabled={busy} onClick={() => act(`v1/runs/${id}/cancel`, undefined, "Run cancelled")}>Cancel run</button>
           ) : null}
+          {r && !active && data.data?.encrypted && !data.data.erased ? (
+            <>
+              <button className="btn" disabled={busy} title="A run on legal hold cannot be erased"
+                      onClick={() => act(`v1/runs/${id}/legal-hold`, { hold: !data.data?.legal_hold }, data.data?.legal_hold ? "Legal hold released" : "Legal hold placed", "PUT")}>
+                {data.data.legal_hold ? "Release legal hold" : "Place legal hold"}
+              </button>
+              {!data.data.legal_hold ? (
+                <button className="btn btn-red" disabled={busy} onClick={() => {
+                  const reason = window.prompt("Erase this run's content permanently?\n\nInputs, model responses, tool outputs and results become unreadable forever. The signed record still verifies.\n\nReason (for the audit log):");
+                  if (reason && reason.trim().length >= 3) act(`v1/runs/${id}/erase`, { reason: reason.trim() }, "Content erased");
+                }}>Erase content</button>
+              ) : null}
+            </>
+          ) : null}
+          {data.data?.erased ? <span title={`Erased ${data.data.erased_at ?? ""}`}><Badge value="erased" label="content erased" /></span> : null}
           <a className="btn" href={`/api/aegis/v1/runs/${id}/receipt`} download={`${id}.receipt.zip`}>Download receipt</a>
         </div>
       </header>

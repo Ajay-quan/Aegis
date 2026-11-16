@@ -11,6 +11,7 @@ from sqlalchemy import Connection, text
 
 from aegistrace.orchestration.service import Actor, Conflict, NotFound, _lock_run, new_id, record_event, transition
 from aegistrace.orchestration.states import RunState
+from aegistrace.persistence import sealing
 
 DEFAULT_TTL = timedelta(hours=1)
 
@@ -87,7 +88,17 @@ def request(conn: Connection, tenant_id: str, req: ApprovalRequest, ttl: timedel
             "res": req.resource,
             "rc": req.risk_class,
             "pr": req.policy_revision,
-            "s": json.dumps(req.summary),
+            # The proposed arguments are content; the tool name and classification stay readable.
+            "s": json.dumps(
+                {
+                    **req.summary,
+                    "arguments": sealing.seal_value(
+                        conn, tenant_id, req.run_id, f"approval:{approval_id}:arguments", req.summary.get("arguments")
+                    ),
+                }
+                if "arguments" in req.summary
+                else req.summary
+            ),
             "ttl": ttl,
         },
     )
@@ -149,3 +160,16 @@ def consume(conn: Connection, run_id: str, action_digest: str, policy_revision: 
         {"r": run_id, "d": action_digest, "pr": policy_revision},
     ).one_or_none()
     return row[0] if row else None
+
+
+def open_summary(
+    conn: Connection, tenant_id: str, run_id: str, approval_id: str, summary: dict[str, Any]
+) -> dict[str, Any]:
+    """Approval summary for display; arguments erased with their run are reported as such."""
+    if "arguments" not in summary:
+        return summary
+    try:
+        args = sealing.open_value(conn, tenant_id, run_id, f"approval:{approval_id}:arguments", summary["arguments"])
+    except sealing.Erased:
+        return {**summary, "arguments": None, "erased": True}
+    return {**summary, "arguments": args}

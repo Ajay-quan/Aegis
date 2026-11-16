@@ -7,7 +7,7 @@ import { Badge, InfoTip, PageHeader, Panel, Skeleton } from "@/components/ui";
 
 interface Rules {
   approval_min_risk_class: number; restricted_data_requires_approval: boolean;
-  blocked_tools: string[]; always_require_approval: string[]; approval_ttl_minutes: number;
+  blocked_tools: string[]; always_require_approval: string[]; approval_ttl_minutes: number; payload_retention_days: number;
 }
 interface RulesResp { rules: Rules; version: number; preset: string | null; presets: Record<string, { rules: Rules; description: string }> }
 interface Tool { name: string; description: string; risk_class: number }
@@ -20,6 +20,7 @@ const LEVELS = [
   { v: 4, label: "Irreversible only", hint: "e.g. send email, make payments" },
 ];
 const TTLS = [[15, "15 minutes"], [30, "30 minutes"], [60, "1 hour"], [240, "4 hours"], [1440, "1 day"]] as const;
+const RETENTION = [[0, "Keep"], [30, "30 days"], [90, "90 days"], [365, "1 year"], [730, "2 years"]] as const;
 const PRESET_LABEL: Record<string, string> = { strict: "Strict", balanced: "Balanced", permissive: "Permissive" };
 
 function outcome(t: Tool, r: Rules): "blocked" | "approval" | "automatic" {
@@ -157,6 +158,14 @@ export default function RulesPage() {
                 <select className="input" value={draft.approval_ttl_minutes} onChange={(e) => set({ approval_ttl_minutes: Number(e.target.value) })}>
                   {TTLS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   {!TTLS.some(([v]) => v === draft.approval_ttl_minutes) ? <option value={draft.approval_ttl_minutes}>{draft.approval_ttl_minutes} minutes</option> : null}
+                </select>
+              </label>
+              <label className="mt-3 flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5 hairline">
+                <span><span className="text-[14px]">Erase run content after</span>
+                  <span className="block text-[12.5px] muted">Inputs, responses and outputs are destroyed this long after a run finishes. The signed record stays verifiable. Runs on legal hold are kept.</span></span>
+                <select className="input" aria-label="Erase run content after" value={draft.payload_retention_days ?? 0} onChange={(e) => set({ payload_retention_days: Number(e.target.value) })}>
+                  {RETENTION.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  {!RETENTION.some(([v]) => v === (draft.payload_retention_days ?? 0)) ? <option value={draft.payload_retention_days}>{draft.payload_retention_days} days</option> : null}
                 </select>
               </label>
             </div>

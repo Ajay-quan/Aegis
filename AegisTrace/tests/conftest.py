@@ -117,3 +117,15 @@ def edit_events(bundle: bytes, fn: Any) -> bytes:
     lines = fn(lines)
     files["events.jsonl"] = b"".join(json.dumps(x).encode() + b"\n" for x in lines)
     return repack(files)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _payload_encryption_on():
+    """The whole suite runs with payload encryption at rest enabled, as deployments should."""
+    import os
+
+    from aegistrace.persistence import sealing
+
+    sealing.configure(sealing.LocalKeyWrapper(os.urandom(32), "test-kek"))
+    yield
+    sealing.configure(None)

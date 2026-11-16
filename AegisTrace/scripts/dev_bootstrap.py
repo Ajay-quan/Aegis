@@ -10,6 +10,8 @@ Usage: uv run python scripts/dev_bootstrap.py [--tenant tnt_demo]
 from __future__ import annotations
 
 import argparse
+import base64
+import secrets
 import json
 import os
 from pathlib import Path
@@ -40,6 +42,7 @@ USER_SCOPES = [
     "replay:read",
     "replay:fork",
     "payloads:read",
+    "data:erase",
     "audit:read",
 ]
 AUDITOR_SCOPES = ["runs:read", "receipts:export", "replay:read", "audit:read"]
@@ -61,6 +64,11 @@ def main() -> None:
     # world-readable locally; the API accepts that only with
     # AEGIS_DEV_ALLOW_SHARED_KEY_FILE=1 (set in compose.yaml, dev only).
     key_path.chmod(0o644)
+    # Development key-encryption key for payloads at rest (production: a KMS key).
+    kek_path = SECRETS / "payload-kek"
+    if not kek_path.exists():
+        kek_path.write_text(base64.b64encode(secrets.token_bytes(32)).decode())
+    kek_path.chmod(0o644)  # read by compose containers through the bind mount (dev only)
     if (SECRETS / "issuer-key.pem").exists():
         issuer = DevIssuer.load(SECRETS)
     else:

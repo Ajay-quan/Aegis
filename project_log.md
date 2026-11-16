@@ -726,3 +726,14 @@ The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its
   2. **`./aegis test` had been silently skipping all dashboard browser tests:** the token lookup ran from the wrong folder and returned empty. Fixed, and a skipped browser test now fails the run. Earlier claims that "dashboard tests pass via ./aegis test" were therefore wrong for that command (they had passed when run directly).
 - Verified with `./aegis test`: AegisTrace pytest all pass, dashboard Playwright 8/8 (3 new SSO tests: real sign-in as admin and auditor, the auditor is refused memory content, a callback this browser didn't start is rejected, a forged state is rejected), extension 22/22. ruff and mypy --strict clean (57 files).
 - Declared `python-multipart` explicitly; it had only arrived transitively via `mcp`.
+
+## Session 20 — 2026-11-16: Payload encryption at rest, erasure, legal hold, retention
+
+- **Encryption at rest** (`persistence/sealing.py`, migration 0006): content fields (run input and result, model responses, tool outputs, validation errors, approval arguments) are AES-256-GCM encrypted with a per-run data key, wrapped by the platform KEK (dev: key file from bootstrap; production: a KMS `KeyWrapper`). AAD binds each ciphertext to table, row and field. Control fields stay in clear because the platform queries them. Evidence is computed over the plaintext, so it is unaffected.
+- **Erasure:** shred a run's key (`POST /v1/runs/{id}/erase`, run-page button) or every finished run of the organization (`POST /v1/data/erase`, needs a typed tenant-id confirmation). Content becomes unrecoverable; receipts still verify VALID with payloads "withheld". Content-free erasure log (`/v1/erasures`, Security page). New scope `data:erase`.
+- **Legal hold:** a held run can't be erased by the API, by retention, or directly in SQL (trigger). Shredded keys can't be restored or deleted (trigger).
+- **Retention:** `payload_retention_days` in org rules (Rules page). The worker applies it every 5 minutes via one SECURITY DEFINER function that can only shred, honors holds and logs each erasure.
+- **The whole AegisTrace suite now runs with encryption on.** Two existing tests read content via raw SQL and were updated to the decrypting path; one now also asserts the raw rows hold no plaintext. The `error` field (only an exception class name) stays in clear on purpose.
+- New tests: 8 privacy contract tests plus 1 Playwright test (hold, erase from the run page, evidence still intact, erasure logged).
+- Verified: `./aegis test` (pytest all pass, Playwright 9/9, extension 22/22), ruff and mypy clean. The live stack stores ciphertext (checked in Postgres).
+- Docs: `AegisTrace/docs/operations/PRIVACY.md`.

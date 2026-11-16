@@ -31,6 +31,9 @@ class OrgRules(BaseModel):
     blocked_tools: list[str] = Field(default_factory=list, max_length=200)
     always_require_approval: list[str] = Field(default_factory=list, max_length=200)
     approval_ttl_minutes: int = Field(default=60, ge=5, le=7 * 24 * 60)
+    payload_retention_days: int = Field(
+        default=0, ge=0, le=3650, description="Erase run content this many days after the run finishes (0 = keep)"
+    )
 
     @field_validator("blocked_tools", "always_require_approval")
     @classmethod

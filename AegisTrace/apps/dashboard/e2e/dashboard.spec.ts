@@ -175,3 +175,25 @@ test.describe("single sign-on (OIDC authorization code + PKCE)", () => {
     expect((await context.cookies()).some((c) => c.name === "aegis_token")).toBe(false);
   });
 });
+
+test("privacy: erase a finished run's content from its page; the erasure is logged", async ({ page }) => {
+  const project = await api.createProject(`pw-erase-${Date.now()}`);
+  const agent = await api.registerAgent(project.id, "pw-erase-agent");
+  await api.grantTool(agent.id, "calc.add", 0);
+  const { id } = await api.submitRun(agent.id, { task: "pw secret task", mock_script: [{ tool: "calc.add", args: { a: 1, b: 2 } }, { final: "secret answer" }] });
+  expect((await api.waitForRun(id, 30_000)).state).toBe("SUCCEEDED");
+  await login(page);
+  await page.goto(`/runs/${id}`);
+  await expect(page.getByText("secret answer").first()).toBeVisible();
+  await page.getByRole("button", { name: "Place legal hold" }).click();
+  await expect(page.getByRole("button", { name: "Erase content" })).toHaveCount(0);  // held runs cannot be erased
+  await page.getByRole("button", { name: "Release legal hold" }).click();
+  page.once("dialog", (d) => d.accept("customer deletion request"));
+  await page.getByRole("button", { name: "Erase content" }).click();
+  await expect(page.getByText("content erased")).toBeVisible();
+  await expect(page.getByText("secret answer")).toHaveCount(0);
+  await page.getByRole("tab", { name: "evidence" }).click();
+  await expect(page.getByText("Chain intact and signed")).toBeVisible();  // evidence survives erasure
+  await page.goto("/security");
+  await expect(page.locator("tr", { hasText: "customer deletion request" })).toHaveCount(1);
+});

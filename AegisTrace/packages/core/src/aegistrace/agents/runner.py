@@ -21,6 +21,7 @@ from aegistrace.evidence.events import payload_digest
 from aegistrace.orchestration.leases import Lease, backoff, heartbeat
 from aegistrace.orchestration.service import Actor, record_event, transition
 from aegistrace.orchestration.states import RunState
+from aegistrace.persistence import sealing
 from aegistrace.persistence.db import tenant_tx
 from aegistrace.tools.gateway import ToolGateway
 from aegistrace.tools.registry import ToolRegistry
@@ -56,11 +57,15 @@ def run_agent(
             ),
             {"r": lease.run_id},
         ).one()
+        run_input = sealing.open_value(c, tenant_id, lease.run_id, f"run:{lease.run_id}:input", run_input)
         recorded = {
-            rec["step"]: ModelResponse.from_record(rec["response"])
-            for (rec,) in c.execute(
-                text("SELECT record->'payload' FROM events WHERE run_id = :r AND event_type = 'model.invoked'"),
-                {"r": lease.run_id},
+            rec["payload"]["step"]: ModelResponse.from_record(rec["payload"]["response"])
+            for rec in (
+                sealing.open_event_record(c, dict(row[0]))
+                for row in c.execute(
+                    text("SELECT record FROM events WHERE run_id = :r AND event_type = 'model.invoked'"),
+                    {"r": lease.run_id},
+                )
             )
         }
     model = model_factory(provider, model_id, run_input)

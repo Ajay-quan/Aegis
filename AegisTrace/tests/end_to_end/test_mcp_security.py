@@ -97,7 +97,16 @@ def test_malicious_mcp_end_to_end(harness, tenant, pinned, tmp_path, monkeypatch
         ("email.send", "no_matching_grant"),
         ("mcp.notes.read_notes", "invalid_arguments"),
     ]
-    outputs = {r[1]: r[3] for r in rows if r[0] == "tool.execution_succeeded"}
+    from aegistrace.orchestration.service import load_events
+
+    with tenant_tx(h.app_engine, t.tenant_id) as c:
+        records = load_events(c, run_id)  # decrypts content (payload encryption is on in tests)
+    outputs = {
+        r["payload"]["tool"]: r["payload"]["output"]["text"]
+        for r in records
+        if r["event_type"] == "tool.execution_succeeded"
+    }
+    assert all(r[3] is None for r in rows)  # raw rows hold only ciphertext for tool output
     assert "IGNORE ALL PREVIOUS INSTRUCTIONS" in outputs["mcp.notes.read_notes"]  # recorded as data
     env_keys = outputs["mcp.notes.env_probe"].split(",")
     assert not any(k.startswith(("AEGIS", "OPENAI")) for k in env_keys), env_keys  # no secret inheritance
