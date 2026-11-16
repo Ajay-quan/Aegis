@@ -320,8 +320,39 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--range", choices=["24h", "7d", "30d"], default="7d")
     s.set_defaults(fn=cmd_insights)
 
+    s = sub.add_parser("mcp", help="MCP servers: discover tools and the schema digests to pin")
+    msub = s.add_subparsers(dest="action", required=True)
+    md = msub.add_parser("discover")
+    md.add_argument("server", help="server id in the servers file")
+    md.add_argument("--config", default=os.environ.get("AEGIS_MCP_SERVERS_FILE"), help="servers file (YAML)")
+    md.set_defaults(fn=cmd_mcp_discover)
+
     sub.add_parser("doctor", help="check configuration and connectivity").set_defaults(fn=cmd_doctor)
     return p
+
+
+def cmd_mcp_discover(a: argparse.Namespace) -> int:
+    """Connect with the configured transport and credentials and list the server's tools. Descriptions
+    come from the server and are untrusted; review each tool before mapping it with a risk class."""
+    from aegistrace.mcpgw.bridge import discover
+    from aegistrace.mcpgw.config import load_servers
+
+    if not a.config:
+        print("error: pass --config or set AEGIS_MCP_SERVERS_FILE", file=sys.stderr)
+        return 2
+    cfg = next((c for c in load_servers(a.config, os.environ) if c.server_id == a.server), None)
+    if cfg is None:
+        print(f"error: no server {a.server!r} in {a.config}", file=sys.stderr)
+        return 2
+    for t in discover(cfg):
+        pinned = cfg.tools.get(t.name)
+        state = (
+            "unmapped"
+            if pinned is None
+            else ("pinned" if pinned.schema_digest == t.schema_digest else "SCHEMA CHANGED")
+        )
+        print(f"{t.name}\t{t.schema_digest}\t{state}\t[untrusted] {t.description[:100]}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

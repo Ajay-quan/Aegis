@@ -16,6 +16,7 @@ from prometheus_client import start_http_server
 from aegistrace.agents.model import MockModel, ModelAdapter, OpenAICompatibleModel
 from aegistrace.api.logging import configure
 from aegistrace.authorization.policy import OpaPolicyEngine
+from aegistrace.mcpgw.config import register_from_env
 from aegistrace.observability import OUTBOX_LAG, QUEUE_DEPTH
 from aegistrace.persistence import erasure, sealing
 from aegistrace.persistence.db import make_engine
@@ -56,6 +57,7 @@ def worker_main() -> None:
     r = redis.Redis.from_url(os.environ["AEGIS_REDIS_URL"], decode_responses=True)
     hosts = {h for h in os.environ.get("AEGIS_FETCH_ALLOWED_HOSTS", "").split(",") if h}
     registry = build_registry(DemoSink(), fetch_hosts=hosts, memory=client_from_env(os.environ))
+    register_from_env(registry, os.environ)  # administrator-configured MCP servers (AEGIS_MCP_SERVERS_FILE)
     gateway = ToolGateway(engine, registry, OpaPolicyEngine(os.environ["AEGIS_OPA_URL"]))
     from aegistrace.evidence.anchor import FileAnchor
     from aegistrace.evidence.signing import load_local_signer

@@ -955,5 +955,9 @@ def build_from_env() -> FastAPI:
     from aegistrace.tools.memory import client_from_env
 
     deps.memory = client_from_env(os.environ)
-    deps.gateway = ToolGateway(deps.engine, build_registry(DemoSink(), memory=deps.memory), OpaPolicyEngine(s.opa_url))
+    from aegistrace.mcpgw.config import register_from_env
+
+    registry = build_registry(DemoSink(), memory=deps.memory)
+    register_from_env(registry, os.environ)  # so /v1/tools and the policy simulator see MCP tools too
+    deps.gateway = ToolGateway(deps.engine, registry, OpaPolicyEngine(s.opa_url))
     return create_app(deps)

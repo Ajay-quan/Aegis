@@ -9,7 +9,7 @@
 
 ## Functional gaps
 - ~~Memory~~ Done: governed memory via AegisMem (`memory.recall/remember/forget`), see `tools/memory.py` and `examples/governed_memory`.
-6. Remote MCP servers (Streamable HTTP) with OAuth 2.1 and audience-bound tokens; MCP conformance testing.
+6. ~~Remote MCP servers with OAuth 2.1 and audience-bound tokens~~ Done (docs/security/MCP_SECURITY.md). Remaining: official MCP conformance-suite run; on-behalf-of-user grants.
 7. ~~Data retention, privacy deletion, legal hold, envelope encryption~~ Done (docs/operations/PRIVACY.md). Remaining: a KMS-backed `KeyWrapper` for production (the dev wrapper uses a key file).
 8. OpenTelemetry tracing and Grafana dashboards. (Prometheus alert rules: done, `infra/observability/alerts.yml`, promtool-validated.)
 9. Custom Rego logic per organization still requires a code change. Per-org rule settings, presets, file-based rules and history are done. Production OPA should load signed policy bundles rather than `--watch`.
