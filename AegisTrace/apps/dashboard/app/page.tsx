@@ -21,6 +21,30 @@ const ACTION_SERIES: Series[] = [
   { key: "denied", label: "Blocked", color: "var(--series-bad)" },
 ];
 
+interface UsageTotals { calls: number; input_tokens: number; output_tokens: number; cost_usd: number | null; unpriced: number; estimated: number }
+
+const fmtTokens = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(1)}k` : n.toLocaleString());
+
+/** Model tokens and estimated cost for the selected range. Cost uses the organization's own price list. */
+function UsageRow({ range }: { range: Range }) {
+  const u = useLive<{ totals: UsageTotals }>(`v1/usage?range=${range}`, 15000);
+  const t = u.data?.totals;
+  const cost = !t ? "–" : t.calls === 0 ? "$0" : t.cost_usd === null ? "No prices set"
+    : `$${t.cost_usd < 1 ? t.cost_usd.toFixed(4) : t.cost_usd.toFixed(2)}`;
+  return (
+    <section className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <Kpi label="Model tokens" value={t ? fmtTokens(t.input_tokens + t.output_tokens) : "–"}
+           sub={t ? `${fmtTokens(t.input_tokens)} in, ${fmtTokens(t.output_tokens)} out, ${t.calls.toLocaleString()} calls` : RANGE_LABEL[range]}
+           info="Tokens sent to and produced by models. When a provider does not report counts, Aegis estimates them from message size and says so." href="/settings/usage" />
+      <Kpi label="Estimated cost" value={cost}
+           sub={!t ? RANGE_LABEL[range] : t.unpriced ? `${t.unpriced.toLocaleString()} calls on models with no price` : "from your price list"}
+           info="Tokens multiplied by the prices you set per model in Settings, Usage. An estimate, not your provider's bill." href="/settings/usage" />
+      <Kpi label="Token counts estimated" value={!t ? "–" : t.calls ? `${Math.round((t.estimated / t.calls) * 100)}%` : "—"}
+           sub={t && t.estimated ? "the provider did not report usage" : "all counts reported by providers"}
+           info="Share of model calls whose token counts were estimated because the provider did not report them. The demo model never reports them." />
+    </section>
+  );
+}
 
 function Kpi({ label, value, sub, info, spark, color, href, tone }: {
   label: string; value: string; sub: string; info: string; spark?: number[]; color?: string; href?: string;
@@ -114,6 +138,8 @@ export default function Overview() {
              info="Actions waiting for a human approval, plus runs where an external action's outcome is unknown and someone must confirm it."
              href="/approvals" />
       </section>
+
+      <UsageRow range={range} />
 
       <Panel className="mt-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b hairline px-4 py-3">

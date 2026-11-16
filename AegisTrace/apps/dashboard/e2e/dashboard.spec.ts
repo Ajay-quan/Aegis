@@ -234,3 +234,25 @@ test("settings: create an API key, use it once from code, revoke it, and see bot
   await expect(page.locator("tr", { hasText: "Created API key" }).first()).toBeVisible();
   await expect(page.locator("tr", { hasText: "Revoked API key" }).first()).toBeVisible();
 });
+
+test("usage: set a model price, run an agent, and see tokens and estimated cost", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/usage");
+  await page.locator("#price-provider").fill("mock");
+  await page.locator("#price-model").fill("mock-deterministic-1");
+  await page.locator("#price-in").fill("3");
+  await page.locator("#price-out").fill("15");
+  await page.getByRole("button", { name: "Save price" }).click();
+  await expect(page.locator("tr", { hasText: "mock/mock-deterministic-1" }).first()).toBeVisible();
+
+  const project = await api.createProject(`pw-usage-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+  const agent = await api.registerAgent(project.id, "pw-usage-agent");
+  await api.grantTool(agent.id, "calc.add", 0);
+  const { id } = await api.submitRun(agent.id, { task: "usage", mock_script: [{ tool: "calc.add", args: { a: 1, b: 2 } }, { final: "3" }] });
+  expect((await api.waitForRun(id, 30_000)).state).toBe("SUCCEEDED");
+  await page.goto(`/runs/${id}`);
+  await expect(page.getByText(/\d+ est\./)).toBeVisible();  // tokens, labelled as estimated
+  await expect(page.getByText(/· \$0\.\d{4}/)).toBeVisible();  // cost from the price just set
+  await page.goto("/settings/usage");
+  await expect(page.locator("tr", { hasText: agent.id })).toBeVisible();
+});

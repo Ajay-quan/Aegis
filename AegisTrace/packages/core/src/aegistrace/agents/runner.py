@@ -24,11 +24,12 @@ from aegistrace.orchestration.leases import Lease, backoff, heartbeat
 from aegistrace.orchestration.service import Actor, record_event, transition
 from aegistrace.orchestration.states import RunState
 from aegistrace.persistence import sealing
+from aegistrace.persistence import usage as model_usage
 from aegistrace.persistence.db import tenant_tx
 from aegistrace.tools.gateway import ToolGateway
 from aegistrace.tools.registry import ToolRegistry
 
-from .model import ModelAdapter, ModelError, ModelResponse, timed
+from .model import ModelAdapter, ModelError, ModelResponse, normalize_usage, timed
 
 MAX_STEPS = 20
 SYSTEM_PROMPT = (
@@ -134,7 +135,11 @@ def run_agent(
                         fencing_token=lease.fencing_token,
                     )
                 return target
+            usage = normalize_usage(resp.usage, messages, registry.describe(), resp)
             with tenant_tx(engine, tenant_id) as c:
+                model_usage.record(
+                    c, tenant_id, lease.run_id, agent_id, step, model.provider, model.model_id, usage, latency_ms
+                )
                 record_event(
                     c,
                     lease.run_id,
@@ -148,7 +153,7 @@ def run_agent(
                         "response": resp.to_record(),
                         "response_digest": payload_digest(resp.to_record()),
                         "latency_ms": latency_ms,
-                        "usage": resp.usage,
+                        "usage": usage,
                     },
                     fencing_token=lease.fencing_token,
                 )

@@ -187,6 +187,7 @@ export default function RunDetail({ params }: { params: Promise<{ id: string }> 
   const replay = useLive<Replay>(`v1/runs/${id}/replay`, active ? 4000 : 30000);
   const [tab, setTab] = useState<"timeline" | "evidence" | "replay">("timeline");
   const [busy, setBusy] = useState(false);
+  const usage = useLive<{ input_tokens: number; output_tokens: number; cost_usd: number | null; estimated: boolean }>(`v1/runs/${id}/usage`, active ? 4000 : 30000);
   const data = useLive<{ encrypted: boolean; erased: boolean; legal_hold: boolean; erased_at: string | null }>(`v1/runs/${id}/data-status`, 15000);
 
   async function act(path: string, json: unknown, msg: string, method = "POST") {
@@ -241,7 +242,10 @@ export default function RunDetail({ params }: { params: Promise<{ id: string }> 
         {[
           ["Agent", <span key="a" className="mono text-[13px]">{r?.agent_id.slice(0, 18)}…</span>],
           ["Events", <span key="e" className="tnum">{r?.last_sequence ?? "–"}</span>],
-          ["Attempts", <span key="t" className="tnum">{r?.attempt ?? "–"}</span>],
+          ["Tokens", <span key="u" className="tnum" title={usage.data?.estimated ? "Estimated: the model did not report usage" : undefined}>
+            {usage.data ? `${(usage.data.input_tokens + usage.data.output_tokens).toLocaleString()}${usage.data.estimated ? " est." : ""}` : "–"}
+            {usage.data?.cost_usd != null ? <span className="muted text-[12.5px]"> · ${usage.data.cost_usd.toFixed(4)}</span> : null}
+          </span>],
           ["Head hash", <Hash key="h" value={r?.head_hash} n={14} />],
         ].map(([k, v], i) => (
           <div key={i} className="panel px-4 py-3"><div className="text-[12.5px] muted">{k}</div><div className="mt-1.5 text-[15px]">{v}</div></div>

@@ -36,6 +36,7 @@ from aegistrace.identity.jwt import AuthError, JwksCache, Principal, TokenValida
 from aegistrace.orchestration import service as runs
 from aegistrace.orchestration.states import TERMINAL, IllegalTransition, RunState
 from aegistrace.persistence import erasure, sealing
+from aegistrace.persistence import usage as model_usage
 from aegistrace.persistence.audit import audit
 from aegistrace.persistence.db import make_engine, tenant_tx
 from aegistrace.replay.engine import reconstruct, replay_decisions
@@ -95,6 +96,13 @@ class ApiKeyIn(Strict):
     name: str = Field(min_length=1, max_length=100)
     scopes: list[str] = Field(min_length=1, max_length=20)
     expires_in_days: int | None = Field(default=None, ge=1, le=365)
+
+
+class PriceIn(Strict):
+    provider: str = Field(pattern=r"^[a-z0-9._-]{1,40}$")
+    model_id: str = Field(min_length=1, max_length=120)
+    input_usd_per_mtok: float = Field(ge=0, le=10_000)
+    output_usd_per_mtok: float = Field(ge=0, le=10_000)
 
 
 class DecisionIn(Strict):
@@ -878,6 +886,111 @@ def create_app(deps: Deps) -> FastAPI:
         except runs.Conflict as exc:
             raise HTTPException(409, str(exc)) from exc
         return {"id": approval_id, "status": status}
+
+    # -- usage and prices -------------------------------------------------------------
+
+    SPANS = {"1h": "1 hour", "24h": "24 hours", "7d": "7 days", "30d": "30 days"}
+
+    @app.get("/v1/usage")
+    def usage_summary(
+        p: Principal = scoped("runs:read"), range_: str = Query("7d", alias="range", pattern="^(1h|24h|7d|30d)$")
+    ) -> dict[str, Any]:
+        """Token usage and estimated cost. Cost uses the organization's own price list; models without a
+        price are counted under `unpriced`. Estimated token counts are counted under `estimated`."""
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            return {"range": range_, **model_usage.summary(c, SPANS[range_])}
+
+    @app.get("/v1/runs/{run_id}/usage")
+    def run_usage(run_id: str, p: Principal = scoped("runs:read")) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            _get_run(c, run_id)
+            rows = (
+                c.execute(
+                    text(
+                        "SELECT step, provider, model_id, input_tokens, output_tokens, source, cost_micro_usd, "
+                        "latency_ms FROM model_usage WHERE run_id = :r ORDER BY step"
+                    ),
+                    {"r": run_id},
+                )
+                .mappings()
+                .all()
+            )
+        steps = [
+            {
+                **{k: v for k, v in r.items() if k != "cost_micro_usd"},
+                "cost_usd": None if r["cost_micro_usd"] is None else r["cost_micro_usd"] / 1_000_000,
+            }
+            for r in rows
+        ]
+        costs = [x["cost_usd"] for x in steps]
+        return {
+            "steps": steps,
+            "input_tokens": sum(x["input_tokens"] for x in steps),
+            "output_tokens": sum(x["output_tokens"] for x in steps),
+            "cost_usd": None if not steps or any(c is None for c in costs) else round(sum(costs), 6),
+            "estimated": any(x["source"] == "estimate" for x in steps),
+        }
+
+    @app.get("/v1/model-prices")
+    def list_prices(p: Principal = scoped("agents:read")) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            rows = (
+                c.execute(
+                    text(
+                        "SELECT provider, model_id, input_micro_usd_per_mtok, output_micro_usd_per_mtok, updated_by, "
+                        "updated_at FROM model_prices ORDER BY provider, model_id"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            seen = c.execute(text("SELECT DISTINCT provider, model_id FROM model_usage")).all()
+        priced = {(r["provider"], r["model_id"]) for r in rows}
+        return {
+            "items": [
+                {
+                    "provider": r["provider"],
+                    "model_id": r["model_id"],
+                    "input_usd_per_mtok": r["input_micro_usd_per_mtok"] / 1_000_000,
+                    "output_usd_per_mtok": r["output_micro_usd_per_mtok"] / 1_000_000,
+                    "updated_by": r["updated_by"],
+                    "updated_at": r["updated_at"],
+                }
+                for r in rows
+            ],
+            "unpriced_models": [{"provider": a, "model_id": b} for a, b in seen if (a, b) not in priced],
+        }
+
+    @app.put("/v1/model-prices")
+    def put_price(body: PriceIn, p: Principal = scoped("policies:write")) -> dict[str, Any]:
+        """Applies to calls made from now on; past costs keep the price they were recorded with."""
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            c.execute(
+                text(
+                    "INSERT INTO model_prices (tenant_id, provider, model_id, input_micro_usd_per_mtok, "
+                    "output_micro_usd_per_mtok, updated_by) VALUES (:t, :p, :m, :i, :o, :u) "
+                    "ON CONFLICT (tenant_id, provider, model_id) DO UPDATE SET input_micro_usd_per_mtok = EXCLUDED."
+                    "input_micro_usd_per_mtok, output_micro_usd_per_mtok = EXCLUDED.output_micro_usd_per_mtok, "
+                    "updated_by = EXCLUDED.updated_by, updated_at = now()"
+                ),
+                {
+                    "t": p.tenant_id,
+                    "p": body.provider,
+                    "m": body.model_id,
+                    "i": round(body.input_usd_per_mtok * 1_000_000),
+                    "o": round(body.output_usd_per_mtok * 1_000_000),
+                    "u": p.subject,
+                },
+            )
+            audit(
+                c,
+                p.tenant_id,
+                p.subject,
+                "model_price.set",
+                f"{body.provider}/{body.model_id}",
+                {"input_usd_per_mtok": body.input_usd_per_mtok, "output_usd_per_mtok": body.output_usd_per_mtok},
+            )
+        return body.model_dump()
 
     # -- API keys and audit ------------------------------------------------------------
 

@@ -10,9 +10,10 @@ import { API_URL, TOKEN_COOKIE } from "@/lib/api";
 const ID = "[a-z]{3}_[a-f0-9]{24}";
 const ALLOW: [string, RegExp][] = [
   ["GET", new RegExp(`^v1/(stats|stats/timeseries|runs|agents|tools|approvals|policy-decisions|signing-keys)$`)],
-  ["GET", new RegExp(`^v1/runs/${ID}(/(events|replay|verification|receipt|data-status))?$`)],
+  ["GET", new RegExp(`^v1/runs/${ID}(/(events|replay|verification|receipt|data-status|usage))?$`)],
   ["GET", /^v1\/erasures$/],
-  ["GET", /^v1\/(api-keys|audit-events)$/],
+  ["GET", /^v1\/(api-keys|audit-events|usage|model-prices)$/],
+  ["PUT", /^v1\/model-prices$/],
   ["POST", /^v1\/api-keys$/],
   ["DELETE", new RegExp(`^v1/api-keys/${ID}$`)],
   ["POST", new RegExp(`^v1/runs/${ID}/erase$`)],

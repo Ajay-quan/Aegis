@@ -26,7 +26,7 @@ class ToolCall:
 class ModelResponse:
     tool_call: ToolCall | None
     text: str | None
-    usage: dict[str, int] = field(default_factory=dict)
+    usage: dict[str, Any] = field(default_factory=dict)  # as reported by the provider
 
     def to_record(self) -> dict[str, Any]:
         return {
@@ -69,8 +69,8 @@ class MockModel:
             return ModelResponse(None, "done")
         item = self._script[step]
         if "tool" in item:
-            return ModelResponse(ToolCall(item["tool"], item.get("args", {})), None, {"tokens": 0})
-        return ModelResponse(None, str(item.get("final", "")), {"tokens": 0})
+            return ModelResponse(ToolCall(item["tool"], item.get("args", {})), None)
+        return ModelResponse(None, str(item.get("final", "")))  # reports no usage: the runner estimates it
 
 
 class OpenAICompatibleModel:
@@ -125,6 +125,34 @@ class OpenAICompatibleModel:
             return ModelResponse(None, msg.get("content") or "", usage)
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise ModelError("invalid_response") from exc
+
+
+def estimate_tokens(text: str) -> int:
+    """Rough token count (~4 bytes per token for English and JSON). Used only when a provider reports none."""
+    return max(1, -(-len(text.encode("utf-8")) // 4)) if text else 0
+
+
+def normalize_usage(
+    reported: dict[str, Any], messages: list[dict[str, Any]], tools: list[dict[str, Any]], resp: ModelResponse
+) -> dict[str, Any]:
+    """Token usage in one shape for every provider: input/output tokens plus where the numbers came from.
+
+    `source` is "provider" when the provider reported both counts (OpenAI-style prompt/completion or
+    Anthropic-style input/output), otherwise "estimate" from the request and response sizes. Estimates are
+    labelled as such wherever they are shown.
+    """
+    import json
+
+    inp = reported.get("prompt_tokens", reported.get("input_tokens"))
+    out = reported.get("completion_tokens", reported.get("output_tokens"))
+    if isinstance(inp, int) and isinstance(out, int):
+        return {"input_tokens": inp, "output_tokens": out, "source": "provider"}
+    produced = json.dumps(resp.to_record()["tool_call"]) if resp.tool_call else (resp.text or "")
+    return {
+        "input_tokens": estimate_tokens(json.dumps(messages) + json.dumps(tools)),
+        "output_tokens": estimate_tokens(produced),
+        "source": "estimate",
+    }
 
 
 def timed(fn: Any, *args: Any) -> tuple[Any, int]:
