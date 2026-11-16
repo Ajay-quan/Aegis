@@ -74,7 +74,7 @@ export default function UsagePage() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel title="By model">{!usage.data ? <Skeleton rows={3} /> : <UsageTable rows={usage.data.by_model} label={(r) => <span className="mono text-[12.5px]">{r.provider}/{r.model_id}</span>} />}</Panel>
-        <Panel title="By agent">{!usage.data ? <Skeleton rows={3} /> : <UsageTable rows={usage.data.by_agent} label={(r) => <span className="mono text-[12.5px]">{r.agent_id}</span>} />}</Panel>
+        <Panel title="By agent, most recently active">{!usage.data ? <Skeleton rows={3} /> : <UsageTable rows={usage.data.by_agent} label={(r) => <span className="mono text-[12.5px]">{r.agent_id}</span>} />}</Panel>
       </div>
 
       <Panel className="mt-4" title="Model prices">

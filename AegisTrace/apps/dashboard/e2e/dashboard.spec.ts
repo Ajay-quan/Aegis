@@ -206,6 +206,12 @@ test("visitors see the harness introduction first, with sign-in at the top right
   for (const p of ["Mem", "Trace", "Guard", "Runtime", "Models", "Studio", "Eval", "Optimize"]) {
     await expect(page.locator(`#pillar-${p.toLowerCase()}`)).toHaveCount(1);
   }
+  for (const [label, path, heading] of [["Studio", "/platform", "One place to build"], ["Roadmap", "/roadmap", "Built in the order"],
+                                         ["Integrations", "/integrations", "Works with the stack"]] as const) {
+    await page.getByRole("navigation", { name: "Pages" }).getByRole("link", { name: label }).click();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(heading);
+  }
   const signIn = page.getByRole("banner").getByRole("link", { name: "Sign in" });
   const box = await signIn.boundingBox();
   expect(box && box.x > (page.viewportSize()?.width ?? 0) / 2).toBe(true);  // right-hand side of the top bar

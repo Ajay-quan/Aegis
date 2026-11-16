@@ -80,7 +80,7 @@ def summary(conn: Connection, since_interval: str) -> dict[str, Any]:
         .all()
     )
     by_agent = (
-        conn.execute(text(q.format(g="agent_id,", gb="GROUP BY agent_id ORDER BY calls DESC LIMIT 50")), p)
+        conn.execute(text(q.format(g="agent_id,", gb="GROUP BY agent_id ORDER BY max(created_at) DESC LIMIT 50")), p)
         .mappings()
         .all()
     )

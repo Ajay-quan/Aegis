@@ -38,7 +38,7 @@ export function Icon({ d }: { d: string }) {
 
 export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
-  const bare = path === "/login" || path === "/welcome";  // public pages: no app chrome, no API polling
+  const bare = ["/login", "/welcome", "/platform", "/roadmap", "/integrations"].includes(path);  // public pages: no app chrome, no API polling
   const { data } = useLive<{ pending_approvals: number }>(bare ? null : "v1/stats", 5000);
   if (bare) return <>{children}<Toaster /></>;
   const pending = data?.pending_approvals ?? 0;

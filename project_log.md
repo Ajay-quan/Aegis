@@ -838,3 +838,9 @@ Following AEGIS_Studio_Master_Engineering_Prompt.md.
   - DB guards stop keys being deleted, un-revoked or having their scopes changed; one SECURITY DEFINER lookup by hash.
   - Studio `/settings/api-keys` and `/settings/audit`.
 - Verified: 8 contract tests, 1 Playwright flow (create → use from code → revoke → refused → audited), the CLI with a key, full suites green, migration round trip.
+
+## 2026-11-16 — Public site split into pages
+- Homepage keeps hero, harness statement, scroll-style eight pillars (sticky index, active pillar lights up), proof and sign-in.
+- New pages: /platform (Studio + guarantees), /roadmap, /integrations. Shared frame in components/public/.
+- Fix: usage "By agent" listed the top 50 by call count, hiding newly active agents; now ordered by most recent activity.
+- Gate: pytest, Playwright 16/16 (homepage test now walks all three pages), extension 22/22, ruff clean.
