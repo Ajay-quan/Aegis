@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AegisMem | Persistent memory for AI agents",
+  title: "Aegis | Trust for AI agents",
   description:
-    "AegisMem gives AI agents persistent memory. Write preferences, decisions, and project context once — retrieve the right context in any future session through one fast REST API.",
+    "Aegis checks what AI agents do, governs what they remember, and keeps a signed record anyone can verify. AegisTrace + AegisMem.",
   openGraph: {
-    title: "AegisMem | Agents forget. Yours won't.",
+    title: "Aegis | Agents you can trust",
     description:
-      "A persistent memory layer for AI agents: semantic retrieval, metadata filtering, and storage that survives the session boundary.",
-    siteName: "AegisMem",
+      "Default-deny permissions, human approvals, a signed audit log, and governed agent memory.",
+    siteName: "Aegis",
     type: "website"
   }
 };

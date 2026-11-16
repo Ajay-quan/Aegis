@@ -685,3 +685,21 @@ The plan is in `docs/RECALL_ROADMAP.md`. The v0.2 memory feature is dropped; its
 - Copied from ~/Desktop/AegisTrace (it wasn't a git repo, so there was no history to keep) into `AegisTrace/`: 210 files, 1.7 MB. Left out: virtualenvs, caches, build output and `.dev/` (dev signing keys and tokens). Secret scan: clean.
 - Verified against the copied code: 82 unit/property/security tests pass. Dashboard (Next.js) builds after building `packages/sdk-typescript`. Integration and end-to-end tests need Docker (Postgres, Redis, OPA) and weren't run.
 - The original on the Desktop is untouched.
+
+## Session 17 — 2026-11-16: Integration (governed memory), monorepo CI, Aegis website
+
+**Integration, 0 → working.** AegisMem is now exposed inside AegisTrace as three governed tools (`AegisTrace/packages/core/src/aegistrace/tools/memory.py`):
+- `memory.recall` (read, class 1), `memory.remember` (reversible write, class 2), `memory.forget` (irreversible, class 4, so human approval by default).
+- The AegisMem user id is built server-side as `<tenant>/<subject>`, and the model picks only the subject (regex-validated). This gives cross-tenant isolation.
+- Each write carries `metadata.aegistrace.run_id`, so every memory traces back to its signed run. The idempotency key is forwarded, so retries don't duplicate. Forget returns AegisMem's signed erasure receipt.
+- Enabled by `AEGIS_MEMORY_URL` (+ `AEGIS_MEMORY_API_KEY`) on the API and worker; off when unset.
+- A real bug was caught by the tests: the evidence log forbids floats, so recall scores are stored as integer basis points.
+- Tests: 6 end-to-end (grant/deny, tenant isolation, approval for forget, quarantined writes, path-escape attempt, verified receipt) plus 1 live contract test against a real AegisMem server plus 1 Playwright test. AegisTrace suite: all pass. Dashboard Playwright: 4/4.
+- Dashboard: new **Memory** page (activity, blocked access, approvals). API: `tool_prefix` filter on `/v1/policy-decisions`.
+- Demo: `AegisTrace/examples/governed_memory/run.sh`, run against the real stack: learn → recall → erase waits for approval → receipt VALID.
+
+**CI.** Per-product root workflows: `aegismem-server`, `aegismem-extension` (new: typecheck, unit, build, Chromium e2e), `aegistrace` (moved from the nested folder, where GitHub never ran it), and `integration` (contract test, AegisTrace ↔ live AegisMem). Every third-party action is pinned to a commit SHA resolved from its own repo. actionlint is clean. **Still never run on GitHub.**
+
+**Website** (`AegisMem/site`): rewritten for Aegis (AegisTrace + AegisMem + Recall). Removed a non-working email address and a "request access" form that didn't submit anywhere. Says plainly that it is pre-release.
+
+**Gotcha:** in this iCloud-synced folder, the `.venv` editable-install `.pth` files can get hidden, so `uv run aegistrace` fails with ModuleNotFoundError. `uv sync` fixes it. AegisTrace's original used `.venv.nosync` for this reason.
