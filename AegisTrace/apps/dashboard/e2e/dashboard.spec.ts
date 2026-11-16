@@ -212,3 +212,25 @@ test("visitors see the harness introduction first, with sign-in at the top right
   await signIn.click();
   await expect(page).toHaveURL(/\/login$/);
 });
+
+test("settings: create an API key, use it once from code, revoke it, and see both in the audit log", async ({ page }) => {
+  const apiUrl = process.env.AEGIS_API_URL ?? "http://127.0.0.1:8000";
+  const name = `pw-key-${Date.now()}`;
+  await login(page);
+  await page.goto("/settings/api-keys");
+  await page.locator("#key-name").fill(name);
+  await page.getByRole("button", { name: "Create key" }).click();
+  const key = (await page.getByTestId("new-key").textContent())?.trim() ?? "";
+  expect(key).toMatch(/^aet_[0-9a-f]{8}_/);
+  expect((await fetch(`${apiUrl}/v1/runs?limit=1`, { headers: { Authorization: `Bearer ${key}` } })).status).toBe(200);
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByTestId("new-key")).toHaveCount(0);  // never shown again
+  const row = page.locator("tr", { hasText: name });
+  await row.getByRole("button", { name: "Revoke" }).click();
+  await row.getByRole("button", { name: "Revoke now" }).click();
+  await expect(row.getByText("revoked")).toBeVisible();
+  expect((await fetch(`${apiUrl}/v1/runs?limit=1`, { headers: { Authorization: `Bearer ${key}` } })).status).toBe(401);
+  await page.goto("/settings/audit");
+  await expect(page.locator("tr", { hasText: "Created API key" }).first()).toBeVisible();
+  await expect(page.locator("tr", { hasText: "Revoked API key" }).first()).toBeVisible();
+});

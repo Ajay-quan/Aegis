@@ -31,6 +31,7 @@ from aegistrace.approvals import service as approvals
 from aegistrace.authorization import rules as rules_mod
 from aegistrace.evidence.bundle import write_bundle_records
 from aegistrace.evidence.signing import Signer, b64
+from aegistrace.identity import apikeys
 from aegistrace.identity.jwt import AuthError, JwksCache, Principal, TokenValidator
 from aegistrace.orchestration import service as runs
 from aegistrace.orchestration.states import TERMINAL, IllegalTransition, RunState
@@ -89,6 +90,12 @@ class HoldIn(Strict):
     reason: str = Field(default="", max_length=500)
 
 
+class ApiKeyIn(Strict):
+    name: str = Field(min_length=1, max_length=100)
+    scopes: list[str] = Field(min_length=1, max_length=20)
+    expires_in_days: int | None = Field(default=None, ge=1, le=365)
+
+
 class DecisionIn(Strict):
     approve: bool
 
@@ -127,6 +134,7 @@ class Deps:
     expose_metrics: bool = False
     gateway: Any = None  # ToolGateway, used only for policy dry runs (never executes)
     memory: Any = None  # MemoryClient (AegisMem), for read-only memory review; None when not configured
+    api_key_pepper: bytes | None = None  # enables API keys (aet_...); None = OIDC tokens only
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -186,8 +194,19 @@ def create_app(deps: Deps) -> FastAPI:
     def principal(authorization: Annotated[str | None, Header()] = None) -> Principal:
         if not authorization or not authorization.lower().startswith("bearer "):
             raise HTTPException(401, "missing bearer token")
+        token = authorization[7:].strip()
+        if apikeys.looks_like_key(token):
+            if deps.api_key_pepper is None:
+                raise HTTPException(401, "API keys are not enabled on this deployment")
+            try:
+                key_principal = apikeys.authenticate(deps.engine, deps.api_key_pepper, token)
+            except apikeys.KeyRejected as exc:
+                log.info("api key rejected", extra={"reason": str(exc)})
+                raise HTTPException(401, "invalid token") from exc
+            _rate_limit(key_principal)
+            return key_principal
         try:
-            p = deps.validator.validate(authorization[7:].strip())
+            p = deps.validator.validate(token)
         except AuthError as exc:
             log.info("authentication failed", extra={"reason": str(exc)})
             raise HTTPException(401, "invalid token") from exc
@@ -829,6 +848,56 @@ def create_app(deps: Deps) -> FastAPI:
             raise HTTPException(409, str(exc)) from exc
         return {"id": approval_id, "status": status}
 
+    # -- API keys and audit ------------------------------------------------------------
+
+    def _keys_enabled() -> bytes:
+        if deps.api_key_pepper is None:
+            raise HTTPException(404, "API keys are not enabled on this deployment")
+        return deps.api_key_pepper
+
+    @app.post("/v1/api-keys", status_code=201)
+    def create_api_key(body: ApiKeyIn, p: Principal = scoped(apikeys.MANAGE_SCOPE)) -> dict[str, Any]:
+        """The plaintext key is in this response only; it cannot be retrieved again."""
+        pepper = _keys_enabled()
+        try:
+            with tenant_tx(deps.engine, p.tenant_id) as c:
+                return apikeys.create(c, pepper, p, body.name, body.scopes, body.expires_in_days)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
+
+    @app.get("/v1/api-keys")
+    def list_api_keys(p: Principal = scoped(apikeys.MANAGE_SCOPE)) -> dict[str, Any]:
+        _keys_enabled()
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            return {"items": apikeys.list_keys(c)}
+
+    @app.delete("/v1/api-keys/{key_id}")
+    def revoke_api_key(key_id: str, p: Principal = scoped(apikeys.MANAGE_SCOPE)) -> dict[str, Any]:
+        _keys_enabled()
+        try:
+            with tenant_tx(deps.engine, p.tenant_id) as c:
+                return apikeys.revoke(c, p, key_id)
+        except LookupError as exc:
+            raise HTTPException(404, "API key not found") from exc
+
+    @app.get("/v1/audit-events")
+    def audit_events(p: Principal = scoped("audit:read"), limit: int = Query(100, ge=1, le=500)) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            rows = (
+                c.execute(
+                    text(
+                        "SELECT id, actor_id, action, target, detail, created_at FROM audit_events "
+                        "ORDER BY created_at DESC, id DESC LIMIT :n"
+                    ),
+                    {"n": limit},
+                )
+                .mappings()
+                .all()
+            )
+        return {"items": [dict(r) for r in rows]}
+
     # -- privacy: erasure (crypto-shredding) and legal hold -------------------------------
 
     def _refused(exc: erasure.ErasureRefused) -> HTTPException:
@@ -968,6 +1037,7 @@ def build_from_env() -> FastAPI:
         redis=redis.Redis.from_url(s.redis_url, decode_responses=True, socket_timeout=0.5),
         rate_limit_per_minute=int(os.environ.get("AEGIS_RATE_LIMIT_PER_MINUTE", "600")),
         expose_metrics=os.environ.get("AEGIS_API_METRICS") == "1",
+        api_key_pepper=apikeys.pepper_from_env(dict(os.environ)),
     )
     from aegistrace.authorization.policy import OpaPolicyEngine
     from aegistrace.tools.demo import DemoSink, build_registry

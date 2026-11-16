@@ -826,3 +826,15 @@ New homepage sections, each item explained in one line with an honest status:
 - **Integrations**: all 12 categories from the plan, with Available or Planned per item (Hugging Face is available for embeddings via AegisMem).
 - **Coming to this site**: the 8 planned pages, plus Open source linking to GitHub.
 - The nav gained "Studio". Checked at 390 and 1440 px; Playwright 10/10.
+
+## Session 26 — 2026-11-16: Studio Phase 0 audit + first slice (API keys, audit log)
+
+Following AEGIS_Studio_Master_Engineering_Prompt.md.
+
+- **Phase 0:** `docs/architecture/{EXISTING_SYSTEM,TARGET_ARCHITECTURE,GAP_ANALYSIS,INTEGRATION_PLAN}.md` from a code inventory (every endpoint of both services, tables, routes); ADR-001 (AegisTrace is Studio's control plane; org = tenant, workspace = project); TASKS.md, DECISIONS.md, KNOWN_ISSUES.md, HANDOVER.md created.
+- Finding: AegisMem already had API keys and an audit log. AegisTrace keys copy that design rather than inventing a second one.
+- **Slice:** AegisTrace API keys.
+  - `aet_` prefix, peppered HMAC-SHA256, plaintext shown once, scoped (a subset of the creator's scopes; `keys:manage` never grantable), optional expiry, revocation checked on every request, append-only audit events.
+  - DB guards stop keys being deleted, un-revoked or having their scopes changed; one SECURITY DEFINER lookup by hash.
+  - Studio `/settings/api-keys` and `/settings/audit`.
+- Verified: 8 contract tests, 1 Playwright flow (create → use from code → revoke → refused → audited), the CLI with a key, full suites green, migration round trip.

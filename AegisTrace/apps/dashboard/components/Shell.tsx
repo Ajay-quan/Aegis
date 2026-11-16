@@ -19,12 +19,14 @@ export const I = {
   operations: "M22 12h-4l-3 9L9 3l-3 9H2",
   insights: "M3 3v18h18M7 15l4-4 3 3 5-6",
   memory: "M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zm0 0v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
+  settings: "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z",
   rules: "M4 6h10M4 12h16M4 18h7M17 4v4M20 16v4M14 18h7",
 };
 
 const NAV: [string, string, keyof typeof I][] = [
   ["/", "Overview", "overview"], ["/insights", "Insights", "insights"], ["/runs", "Runs", "runs"],
   ["/approvals", "Approvals", "approvals"], ["/agents", "Agents & permissions", "agents"], ["/rules", "Rules", "rules"], ["/memory", "Memory", "memory"], ["/security", "Security", "security"], ["/operations", "System health", "operations"],
+  ["/settings/api-keys", "API keys", "settings"], ["/settings/audit", "Audit log", "rules"],
 ];
 
 export function Icon({ d }: { d: string }) {

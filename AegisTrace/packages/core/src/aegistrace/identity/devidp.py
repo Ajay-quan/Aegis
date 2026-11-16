@@ -48,6 +48,7 @@ ADMIN_SCOPES = [
     "replay:fork",
     "payloads:read",
     "data:erase",
+    "keys:manage",
     "audit:read",
 ]
 AUDITOR_SCOPES = ["runs:read", "receipts:export", "replay:read", "audit:read"]

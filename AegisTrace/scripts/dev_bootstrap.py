@@ -40,6 +40,7 @@ USER_SCOPES = [
     "replay:fork",
     "payloads:read",
     "data:erase",
+    "keys:manage",
     "audit:read",
 ]
 AUDITOR_SCOPES = ["runs:read", "receipts:export", "replay:read", "audit:read"]
@@ -54,6 +55,11 @@ def main() -> None:
     SECRETS.mkdir(parents=True, exist_ok=True)
     os.chmod(SECRETS.parent, 0o700)
     key_path = SECRETS / "signing-key.pem"  # legacy location, imported into the key ring below
+    # Pepper for API key hashes (AEGIS_API_KEY_PEPPER_FILE). Changing it invalidates every API key.
+    pepper_path = SECRETS / "api-key-pepper"
+    if not pepper_path.exists():
+        pepper_path.write_text(secrets.token_urlsafe(32))
+    pepper_path.chmod(0o644)  # read by the API container through the bind mount (dev only)
     # Development key-encryption key for payloads at rest (production: a KMS key).
     kek_path = SECRETS / "payload-kek"
     if not kek_path.exists():

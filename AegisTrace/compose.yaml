@@ -51,6 +51,7 @@ services:
       AEGIS_SIGNER_SOCKET: /run/aegis-signer/signer.sock
       AEGIS_PAYLOAD_KEK_FILE: /run/aegis/payload-kek  # payload encryption at rest (dev key; production: KMS)
       AEGIS_API_METRICS: "1"
+      AEGIS_API_KEY_PEPPER_FILE: /run/aegis/api-key-pepper  # enables aet_ API keys (used by the API only)
       # Tracing: off unless an OTLP endpoint is set (./aegis up --observability sets it to Tempo).
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       AEGIS_DEV_ALLOW_SHARED_KEY_FILE: "1"  # local compose only; see evidence/signing.py
