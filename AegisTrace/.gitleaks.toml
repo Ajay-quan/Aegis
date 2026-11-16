@@ -5,4 +5,6 @@ useDefault = true
 
 [allowlist]
 description = "git-ignored local dev secrets and build output"
+# The generic-api-key rule reads the type name in `key: Ed25519PrivateKey | None` as a secret value.
+regexes = ['''^Ed25519PrivateKey$''']
 paths = ['''(^|/)\.dev/''', '''(^|/)\.next/''', '''(^|/)node_modules/''', '''(^|/)\.venv(\.nosync)?/''']
