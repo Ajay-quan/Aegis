@@ -50,6 +50,9 @@ services:
       AEGIS_SIGNING_KEY_FILE: /run/aegis/signing-key.pem
       AEGIS_DEV_ALLOW_SHARED_KEY_FILE: "1"  # local compose only; see evidence/signing.py
       AEGIS_RATE_LIMIT_PER_MINUTE: ${AEGIS_RATE_LIMIT_PER_MINUTE:-600}
+      # Governed memory (AegisMem). Empty = memory.* tools not registered.
+      AEGIS_MEMORY_URL: ${AEGIS_MEMORY_URL:-}
+      AEGIS_MEMORY_API_KEY: ${AEGIS_MEMORY_API_KEY:-}
     volumes: ["./.dev/secrets:/run/aegis:ro"]
     ports: ["127.0.0.1:8000:8000"]
     read_only: true

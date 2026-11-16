@@ -1,0 +1,8 @@
+{
+  "task": "Onboard the Acme account and remember what matters",
+  "mock_script": [
+    {"tool": "memory.remember", "args": {"subject": "acme", "text": "Acme wants invoices in EUR, sent on the 1st of each month"}},
+    {"tool": "memory.remember", "args": {"subject": "acme", "text": "Acme's billing contact is the finance team, not sales"}},
+    {"final": "Saved two facts about Acme."}
+  ]
+}
