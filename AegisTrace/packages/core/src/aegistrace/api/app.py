@@ -10,6 +10,7 @@ resolve to 404, indistinguishable from nonexistent ones.
 import logging
 import os
 import re
+import secrets
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 
 from aegistrace import tracing
+from aegistrace.agents import models_hub
 from aegistrace.approvals import service as approvals
 from aegistrace.authorization import rules as rules_mod
 from aegistrace.evidence.bundle import write_bundle_records
@@ -63,7 +65,8 @@ class ProjectIn(Strict):
 class AgentIn(Strict):
     project_id: str = Field(pattern=ID)
     name: str = Field(min_length=1, max_length=100)
-    model_provider: str = Field(default="mock", pattern=r"^(mock|openai-compatible)$")
+    # "registry": model_id is a Model Hub registration id (mdl_...)
+    model_provider: str = Field(default="mock", pattern=r"^(mock|openai-compatible|registry)$")
     model_id: str = Field(default="mock-deterministic-1", max_length=100)
 
 
@@ -125,6 +128,15 @@ class MemCorrectIn(Strict):
 class MemForgetIn(Strict):
     memory_ids: list[str] = Field(min_length=1, max_length=100)
     reason: str = Field(min_length=3, max_length=500)
+
+
+class ModelIn(Strict):
+    name: str = Field(min_length=1, max_length=80)
+    provider: str = Field(pattern="^(openai-compatible|ollama|anthropic|mock)$")
+    model_id: str = Field(min_length=1, max_length=120)
+    base_url: str | None = Field(default=None, max_length=300)
+    api_key: str | None = Field(default=None, max_length=500)  # stored encrypted, never returned
+    allow_private_network: bool = False
 
 
 class DecisionIn(Strict):
@@ -1075,6 +1087,126 @@ def create_app(deps: Deps) -> FastAPI:
             if "at least one owner" in str(exc):
                 raise HTTPException(409, "an organization must keep at least one owner") from exc
             raise
+        return Response(status_code=204)
+
+    # -- Model Hub ---------------------------------------------------------------------
+
+    def _reg_row(c: Connection, model_id: str) -> Any:
+        row = c.execute(
+            text(
+                "SELECT id, provider, base_url, model_id, allow_private_network, secret FROM model_registrations "
+                "WHERE id = :i"
+            ),
+            {"i": model_id},
+        ).one_or_none()
+        if row is None:
+            raise HTTPException(404, "model not found")
+        return row
+
+    @app.get("/v1/models")
+    def list_models(p: Principal = scoped("agents:read")) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            rows = (
+                c.execute(
+                    text(
+                        "SELECT m.id, m.name, m.provider, m.base_url, m.model_id, m.allow_private_network, "
+                        "m.secret IS NOT NULL has_key, m.status, m.last_check_at, m.last_check_detail, m.created_at, "
+                        "(SELECT count(*) FROM agents a WHERE a.model_provider = 'registry' AND a.model_id = m.id) "
+                        "agents "
+                        "FROM model_registrations m ORDER BY m.created_at"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        return {"items": [{**dict(r), "runnable": r["provider"] in models_hub.RUNNABLE} for r in rows]}
+
+    @app.post("/v1/models", status_code=201)
+    def register_model(body: ModelIn, p: Principal = scoped("policies:write")) -> dict[str, Any]:
+        mid = "mdl_" + secrets.token_hex(12)
+        if body.base_url:
+            try:
+                models_hub.check_endpoint(body.base_url, body.allow_private_network)
+            except models_hub.EndpointRefused as exc:
+                raise HTTPException(422, str(exc)) from exc
+        try:
+            secret = sealing.seal_secret(f"{p.tenant_id}:{mid}", body.api_key) if body.api_key else None
+        except RuntimeError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        try:
+            with tenant_tx(deps.engine, p.tenant_id) as c:
+                c.execute(
+                    text(
+                        "INSERT INTO model_registrations (id, tenant_id, name, provider, base_url, model_id, secret, "
+                        "allow_private_network, created_by) VALUES (:i, :t, :n, :p, :b, :m, :s, :a, :c)"
+                    ),
+                    {
+                        "i": mid,
+                        "t": p.tenant_id,
+                        "n": body.name,
+                        "p": body.provider,
+                        "b": body.base_url,
+                        "m": body.model_id,
+                        "s": secret,
+                        "a": body.allow_private_network,
+                        "c": p.subject,
+                    },
+                )
+                audit(
+                    c,
+                    p.tenant_id,
+                    p.subject,
+                    "model.registered",
+                    mid,
+                    {
+                        "name": body.name,
+                        "provider": body.provider,
+                        "model_id": body.model_id,
+                        "base_url": body.base_url,
+                        "has_key": secret is not None,
+                    },
+                )
+        except IntegrityError as exc:
+            raise HTTPException(409, "a model with this name already exists") from exc
+        return {
+            "id": mid,
+            "name": body.name,
+            "provider": body.provider,
+            "model_id": body.model_id,
+            "runnable": body.provider in models_hub.RUNNABLE,
+        }
+
+    @app.post("/v1/models/{model_id}/test")
+    def test_model(model_id: str, p: Principal = scoped("policies:write")) -> dict[str, Any]:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            row = _reg_row(c, model_id)
+        reg = models_hub.Registration(row[0], p.tenant_id, row[1], row[2], row[3], row[4])
+        try:
+            secret = sealing.open_secret(f"{p.tenant_id}:{row[0]}", row[5]) if row[5] is not None else None
+            ok, detail = models_hub.test_connection(reg, secret)
+        except models_hub.EndpointRefused as exc:
+            ok, detail = False, str(exc)
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            c.execute(
+                text(
+                    "UPDATE model_registrations SET status = :s, last_check_at = now(), last_check_detail = :d "
+                    "WHERE id = :i"
+                ),
+                {"s": "connected" if ok else "failed", "d": detail, "i": model_id},
+            )
+        return {"id": model_id, "status": "connected" if ok else "failed", "detail": detail}
+
+    @app.delete("/v1/models/{model_id}", status_code=204)
+    def delete_model(model_id: str, p: Principal = scoped("policies:write")) -> Response:
+        with tenant_tx(deps.engine, p.tenant_id) as c:
+            _reg_row(c, model_id)
+            used = c.execute(
+                text("SELECT count(*) FROM agents WHERE model_provider = 'registry' AND model_id = :i"), {"i": model_id}
+            ).scalar_one()
+            if used:
+                raise HTTPException(409, f"{used} agent(s) use this model; switch them to another model first")
+            c.execute(text("DELETE FROM model_registrations WHERE id = :i"), {"i": model_id})
+            audit(c, p.tenant_id, p.subject, "model.removed", model_id, {})
         return Response(status_code=204)
 
     # -- usage and prices -------------------------------------------------------------

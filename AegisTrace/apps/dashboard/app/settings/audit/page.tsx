@@ -17,7 +17,8 @@ const ACTION: Record<string, string> = {
   "member.added": "Added a member", "member.role_changed": "Changed a role", "member.removed": "Removed a member",
   "member.bootstrapped_owner": "First owner of the organization",
   "memory.released": "Released a held memory", "memory.rejected": "Rejected a held memory",
-  "memory.corrected": "Corrected a memory", "memory.erased": "Erased memories", "model_price.set": "Set a model price",
+  "memory.corrected": "Corrected a memory", "memory.erased": "Erased memories",
+  "model.registered": "Registered a model", "model.removed": "Removed a model", "model_price.set": "Set a model price",
 };
 
 export default function Audit() {

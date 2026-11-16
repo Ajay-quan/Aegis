@@ -310,3 +310,18 @@ test("memory explorer: find what an agent remembered, search it, correct it, era
   await expect(page.getByText(/signed receipt/)).toBeVisible();
   await expect(page.locator("li", { hasText: "Prefers invoices in USD" })).toHaveCount(0);
 });
+
+test("model hub: register a model and test its connection", async ({ page }) => {
+  const name = `pw-model-${Date.now()}`;
+  await login(page);
+  await page.goto("/models");
+  await page.locator("#model-provider").selectOption("mock");
+  await page.locator("#model-name").fill(name);
+  await page.locator("#model-id").fill("mock-deterministic-1");
+  await page.getByRole("button", { name: "Register" }).click();
+  const row = page.locator("li", { hasText: name });
+  await expect(row.getByText("Not tested yet.")).toBeVisible();
+  await row.getByRole("button", { name: "Test connection" }).click();
+  await expect(row.getByText("connected", { exact: true })).toBeVisible();
+  await expect(row.getByText(/agents can run on it/)).toBeVisible();
+});

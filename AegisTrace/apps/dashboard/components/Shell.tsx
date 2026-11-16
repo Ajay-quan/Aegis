@@ -25,7 +25,7 @@ export const I = {
 
 const NAV: [string, string, keyof typeof I][] = [
   ["/", "Overview", "overview"], ["/insights", "Insights", "insights"], ["/runs", "Runs", "runs"],
-  ["/approvals", "Approvals", "approvals"], ["/agents", "Agents & permissions", "agents"], ["/rules", "Rules", "rules"], ["/memory", "Memory", "memory"], ["/security", "Security", "security"], ["/operations", "System health", "operations"],
+  ["/approvals", "Approvals", "approvals"], ["/agents", "Agents & permissions", "agents"], ["/rules", "Rules", "rules"], ["/memory", "Memory", "memory"], ["/models", "Model Hub", "operations"], ["/security", "Security", "security"], ["/operations", "System health", "operations"],
   ["/settings/members", "Members", "agents"], ["/settings/usage", "Usage", "insights"], ["/settings/api-keys", "API keys", "settings"], ["/settings/audit", "Audit log", "rules"],
 ];
 

@@ -168,3 +168,16 @@ def open_event_record(conn: Connection, record: dict[str, Any]) -> dict[str, Any
     except Erased:
         return {k: v for k, v in record.items() if k != "payload"}
     return {**record, "payload": opened}
+
+
+def seal_secret(scope: str, plaintext: str) -> bytes:
+    """Encrypt a stored credential (e.g. a provider API key) with the platform KEK, bound to `scope`."""
+    if _wrapper is None:
+        raise RuntimeError("storing credentials needs AEGIS_PAYLOAD_KEK_FILE (the platform key-encryption key)")
+    return _wrapper.wrap(plaintext.encode(), b"aegistrace.secret\x00" + scope.encode())
+
+
+def open_secret(scope: str, blob: bytes) -> str:
+    if _wrapper is None:
+        raise RuntimeError("no key-encryption key configured")
+    return _wrapper.unwrap(bytes(blob), b"aegistrace.secret\x00" + scope.encode()).decode()
