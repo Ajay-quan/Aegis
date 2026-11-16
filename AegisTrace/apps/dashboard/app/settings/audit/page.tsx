@@ -6,7 +6,15 @@ import { Empty, LiveIndicator, PageHeader, Panel, Skeleton } from "@/components/
 
 interface Ev { id: number; actor_id: string; action: string; target: string; detail: Record<string, unknown>; created_at: string }
 
-const ACTION: Record<string, string> = { "api_key.created": "Created API key", "api_key.revoked": "Revoked API key" };
+const ACTION: Record<string, string> = {
+  "api_key.created": "Created API key", "api_key.revoked": "Revoked API key",
+  "project.created": "Created workspace", "agent.created": "Created agent",
+  "grant.set": "Granted a tool", "grant.revoked": "Removed a tool",
+  "rules.updated": "Changed organization rules", "rules.file_applied": "Applied a rules file",
+  "approval.approved": "Approved an action", "approval.rejected": "Rejected an action",
+  "data.erased": "Erased run content", "data.erased_all": "Erased all run content",
+  "legal_hold.placed": "Placed legal hold", "legal_hold.released": "Released legal hold",
+};
 
 export default function Audit() {
   const live = useLive<{ items: Ev[] }>("v1/audit-events?limit=200", 10000);

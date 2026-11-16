@@ -36,6 +36,7 @@ from aegistrace.identity.jwt import AuthError, JwksCache, Principal, TokenValida
 from aegistrace.orchestration import service as runs
 from aegistrace.orchestration.states import TERMINAL, IllegalTransition, RunState
 from aegistrace.persistence import erasure, sealing
+from aegistrace.persistence.audit import audit
 from aegistrace.persistence.db import make_engine, tenant_tx
 from aegistrace.replay.engine import reconstruct, replay_decisions
 
@@ -290,7 +291,9 @@ def create_app(deps: Deps) -> FastAPI:
 
         try:
             with tenant_tx(deps.engine, p.tenant_id) as c:
-                return {"id": mk(c, p.tenant_id, body.name), "name": body.name}
+                pid = mk(c, p.tenant_id, body.name)
+                audit(c, p.tenant_id, p.subject, "project.created", pid, {"name": body.name})
+                return {"id": pid, "name": body.name}
         except IntegrityError as exc:
             raise HTTPException(409, "project name already exists") from exc
 
@@ -301,6 +304,14 @@ def create_app(deps: Deps) -> FastAPI:
         try:
             with tenant_tx(deps.engine, p.tenant_id) as c:
                 aid = mk(c, p.tenant_id, body.project_id, body.name, body.model_provider, body.model_id)
+                audit(
+                    c,
+                    p.tenant_id,
+                    p.subject,
+                    "agent.created",
+                    aid,
+                    {"name": body.name, "model": f"{body.model_provider}/{body.model_id}"},
+                )
         except IntegrityError as exc:
             raise HTTPException(409, "agent already exists or project not found") from exc
         return {"id": aid, **body.model_dump()}
@@ -337,6 +348,14 @@ def create_app(deps: Deps) -> FastAPI:
                     "u": p.subject,
                 },
             )
+            audit(
+                c,
+                p.tenant_id,
+                p.subject,
+                "grant.set",
+                agent_id,
+                {"tool": body.tool, "max_risk_class": body.max_risk_class, "allowed_hosts": body.allowed_hosts},
+            )
         log.info("grant updated", extra={"tenant": p.tenant_id, "agent": agent_id, "tool": body.tool, "by": p.subject})
         return {"agent_id": agent_id, **body.model_dump()}
 
@@ -366,6 +385,8 @@ def create_app(deps: Deps) -> FastAPI:
             n = c.execute(
                 text("DELETE FROM tool_grants WHERE agent_id=:a AND tool=:t"), {"a": agent_id, "t": tool}
             ).rowcount
+            if n:
+                audit(c, p.tenant_id, p.subject, "grant.revoked", agent_id, {"tool": tool})
         if not n:
             raise HTTPException(404, "grant not found")
         log.info("grant revoked", extra={"tenant": p.tenant_id, "agent": agent_id, "tool": tool, "by": p.subject})
@@ -417,6 +438,14 @@ def create_app(deps: Deps) -> FastAPI:
             raise HTTPException(403, "rules are administered by users")
         with tenant_tx(deps.engine, p.tenant_id) as c:
             version = rules_mod.save(c, p.tenant_id, body.rules, p.subject, body.source, body.note)
+            audit(
+                c,
+                p.tenant_id,
+                p.subject,
+                "rules.updated",
+                f"version {version}",
+                {"preset": rules_mod.preset_of(body.rules), "note": body.note},
+            )
         log.info("org rules updated", extra={"tenant": p.tenant_id, "version": version, "by": p.subject})
         return {"rules": body.rules.model_dump(), "version": version, "preset": rules_mod.preset_of(body.rules)}
 
@@ -491,6 +520,7 @@ def create_app(deps: Deps) -> FastAPI:
                     if existing.get(t) != v:
                         changes.append(f"grant {t} (class <= {v[0]}) to {aid}")
             if not dry_run and changes:
+                audit(c, p.tenant_id, p.subject, "rules.file_applied", "rules file", {"changes": changes[:50]})
                 if "organization rules" in changes:
                     rules_mod.save(c, p.tenant_id, resolved, p.subject, "file", "applied from rules file")
                 for aid, specs in doc.agents.items():
@@ -840,6 +870,7 @@ def create_app(deps: Deps) -> FastAPI:
         try:
             with tenant_tx(deps.engine, p.tenant_id) as c:
                 status = approvals.decide(c, approval_id, actor(p), body.approve)
+                audit(c, p.tenant_id, p.subject, "approval." + status, approval_id, {})
         except runs.NotFound as exc:
             raise HTTPException(404, "approval not found") from exc
         except approvals.ApprovalDenied as exc:
@@ -914,7 +945,9 @@ def create_app(deps: Deps) -> FastAPI:
     def erase_run(run_id: str, body: EraseIn, p: Principal = scoped("data:erase")) -> dict[str, Any]:
         try:
             with tenant_tx(deps.engine, p.tenant_id) as c:
-                return erasure.erase_run(c, p.tenant_id, run_id, actor(p), body.reason)
+                out = erasure.erase_run(c, p.tenant_id, run_id, actor(p), body.reason)
+                audit(c, p.tenant_id, p.subject, "data.erased", run_id, {"reason": body.reason})
+                return out
         except LookupError as exc:
             raise HTTPException(404, "run not found") from exc
         except erasure.ErasureRefused as exc:
@@ -925,13 +958,30 @@ def create_app(deps: Deps) -> FastAPI:
         if body.confirm != p.tenant_id:
             raise HTTPException(422, "set confirm to your tenant id to erase all of its finished runs")
         with tenant_tx(deps.engine, p.tenant_id) as c:
-            return erasure.erase_tenant(c, p.tenant_id, actor(p), body.reason, body.finished_before)
+            out = erasure.erase_tenant(c, p.tenant_id, actor(p), body.reason, body.finished_before)
+            audit(
+                c,
+                p.tenant_id,
+                p.subject,
+                "data.erased_all",
+                p.tenant_id,
+                {"reason": body.reason, "runs": len(out["run_ids"])},
+            )
+            return out
 
     @app.put("/v1/runs/{run_id}/legal-hold")
     def legal_hold(run_id: str, body: HoldIn, p: Principal = scoped("data:erase")) -> dict[str, Any]:
         try:
             with tenant_tx(deps.engine, p.tenant_id) as c:
                 erasure.set_legal_hold(c, run_id, body.hold)
+                audit(
+                    c,
+                    p.tenant_id,
+                    p.subject,
+                    "legal_hold." + ("placed" if body.hold else "released"),
+                    run_id,
+                    {"reason": body.reason},
+                )
         except LookupError as exc:
             raise HTTPException(404, "run not found") from exc
         except erasure.ErasureRefused as exc:

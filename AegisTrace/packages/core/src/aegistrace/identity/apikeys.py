@@ -27,6 +27,8 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
+from aegistrace.persistence.audit import audit
+
 from .jwt import Principal
 
 PREFIX = "aet_"
@@ -65,18 +67,6 @@ def authenticate(engine: Engine, pepper: bytes, raw: str) -> Principal:
     if row is None or not row[3]:
         raise KeyRejected("unknown, revoked or expired key")
     return Principal(subject=f"key:{row[0]}", tenant_id=row[1], scopes=frozenset(row[2]), kind="service", token_id=None)
-
-
-def audit(conn: Connection, tenant_id: str, actor_id: str, action: str, target: str, detail: dict[str, Any]) -> None:
-    import json
-
-    conn.execute(
-        text(
-            "INSERT INTO audit_events (tenant_id, actor_id, action, target, detail) "
-            "VALUES (:t, :a, :ac, :tg, CAST(:d AS jsonb))"
-        ),
-        {"t": tenant_id, "a": actor_id, "ac": action, "tg": target, "d": json.dumps(detail)},
-    )
 
 
 def create(
