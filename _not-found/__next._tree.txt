@@ -1,4 +1,4 @@
 :HL["/Aegis/_next/static/chunks/1_lq3y_sqq1--.css","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"/_not-found","h":96,"c":"$Q2"}]]
-0:{"b":"J6mu_D1AI-_bq6y8qsziv","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"NpdSHWXuAOLdvY7sUnBSE","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
